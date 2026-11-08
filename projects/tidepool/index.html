@@ -61,12 +61,12 @@ const gauss = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v)
 const wrapD = (d, L) => d > L / 2 ? d - L : d < -L / 2 ? d + L : d;
 
 // ---------- brain ----------
-// inputs: food left, food right, food ahead-far, crowd, energy, bias  -> hidden(6) -> turn, thrust
-const NI = 6, NH = 6, NO = 2;
+// inputs: food L, food R, food ahead, prey L, prey R, threat, crowd, energy, bias -> hidden(8) -> turn, thrust
+const NI = 9, NH = 8, NO = 2;
 const NW = NI * NH + NH * NO;
 function newGenome() {
   const w = new Float32Array(NW); for (let i = 0; i < NW; i++) w[i] = gauss() * 0.8;
-  return { w, size: rand(3, 6), hue: rand(360), sense: rand(25, 45) };
+  return { w, size: rand(3, 6), hue: rand(360), sense: rand(25, 45), gut: rand(0.6, 1.5) };
 }
 function mutate(g, rate) {
   const w = Float32Array.from(g.w);
@@ -77,6 +77,7 @@ function mutate(g, rate) {
     size: clamp(g.size + gauss() * rate * 2, 2, 10),
     hue: (g.hue + gauss() * rate * 40 + 360) % 360,
     sense: clamp(g.sense + gauss() * rate * 15, 10, 90),
+    gut: clamp(g.gut + gauss() * rate * 1.0, 0.5, 1.5),
   };
 }
 const hid = new Float32Array(NH);
@@ -89,15 +90,17 @@ function think(w, inp, out) {
 // ---------- world ----------
 const CELL = 30;
 let food, creatures, tick, nextLineage, grid, gw, gh, history, selected;
-const params = { speed: 1, foodRate: 1.0, mut: 0.10, paused: false, trails: false };
+const params = { speed: 1, foodRate: 1.0, mut: 0.10, paused: false, trails: false, predators: true };
 
 function reset() {
   food = []; creatures = []; tick = 0; nextLineage = 0; history = []; selected = null;
   for (let i = 0; i < 600; i++) food.push({ x: rand(W), y: rand(H), e: 1 });
   for (let i = 0; i < 60; i++) spawn(newGenome(), rand(W), rand(H), 0, nextLineage++);
+  if (params.predators) for (let i = 0; i < 8; i++) spawn(newPredator(), rand(W), rand(H), 0, nextLineage++, 250);
 }
+function newPredator() { return { ...newGenome(), size: rand(7, 8.5), gut: rand(0.5, 0.7), sense: rand(45, 60), hue: rand(340, 380) % 360 }; }
 function spawn(g, x, y, gen, lineage, energy = 60) {
-  creatures.push({ g, x, y, a: rand(Math.PI * 2), v: 0, energy, age: 0, gen, lineage, eaten: 0, kids: 0 });
+  creatures.push({ g, x, y, a: rand(Math.PI * 2), v: 0, energy, age: 0, gen, lineage, eaten: 0, kids: 0, kills: 0 });
 }
 
 function buildGrid() {
@@ -138,9 +141,21 @@ function step() {
   }
   buildGrid();
 
-  // crowd density via a coarse creature grid
-  const crowd = new Map();
-  for (const c of creatures) { const k = ((c.x / 60) | 0) + ',' + ((c.y / 60) | 0); crowd.set(k, (crowd.get(k) || 0) + 1); }
+  // creature grid, for sensing each other and for predation
+  const CC = 60, cgw = Math.ceil(W / CC), cgh = Math.ceil(H / CC);
+  const cgrid = Array.from({ length: cgw * cgh }, () => []);
+  for (const c of creatures) cgrid[Math.min(cgh - 1, (c.y / CC) | 0) * cgw + Math.min(cgw - 1, (c.x / CC) | 0)].push(c);
+  const nearCreatures = (c, r, fn) => {
+    const r2 = r * r, cx0 = Math.floor((c.x - r) / CC), cx1 = Math.floor((c.x + r) / CC);
+    const cy0 = Math.floor((c.y - r) / CC), cy1 = Math.floor((c.y + r) / CC);
+    for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++)
+      for (const o of cgrid[((cy % cgh + cgh) % cgh) * cgw + ((cx % cgw + cgw) % cgw)]) {
+        if (o === c || o.energy <= 0) continue;
+        const dx = wrapD(o.x - c.x, W), dy = wrapD(o.y - c.y, H), d2 = dx * dx + dy * dy;
+        if (d2 < r2) fn(o, dx, dy, Math.sqrt(d2));
+      }
+  };
+  const PREY_RATIO = 1.25;   // you can eat anything this many times smaller than you
 
   const born = [];
   for (const c of creatures) {
@@ -151,18 +166,35 @@ function step() {
     inp[0] = Math.min(1, countFood(lx, ly, s * 0.6) / 4);
     inp[1] = Math.min(1, countFood(rx, ry, s * 0.6) / 4);
     inp[2] = Math.min(1, countFood(fx, fy, s * 0.8) / 6);
-    inp[3] = Math.min(1, ((crowd.get(((c.x / 60) | 0) + ',' + ((c.y / 60) | 0)) || 1) - 1) / 5);
-    inp[4] = Math.min(1, c.energy / 150);
-    inp[5] = 1;
+    if (c.energy <= 0) continue;   // eaten earlier this tick
+    let preyL = 0, preyR = 0, threat = 0, crowd = 0;
+    const ca = Math.cos(c.a), sa = Math.sin(c.a);
+    nearCreatures(c, s * 1.5, (o, dx, dy, d) => {
+      const close = 1 - d / (s * 1.5);
+      crowd++;
+      if (o.g.size * PREY_RATIO < g.size && dx * ca + dy * sa > 0) {   // smaller, and in front
+        if (ca * dy - sa * dx < 0) preyL += close; else preyR += close;
+      } else if (o.g.size > g.size * PREY_RATIO) threat = Math.max(threat, close);
+    });
+    inp[3] = Math.min(1, preyL); inp[4] = Math.min(1, preyR); inp[5] = threat;
+    inp[6] = Math.min(1, crowd / 6);
+    inp[7] = Math.min(1, c.energy / 150);
+    inp[8] = 1;
     think(g.w, inp, out);
     c.a += out[0] * 0.25;
     c.v = (out[1] + 1) * 0.5 * (3.2 / Math.sqrt(g.size / 3));
     c.x = (c.x + Math.cos(c.a) * c.v + W) % W;
     c.y = (c.y + Math.sin(c.a) * c.v + H) % H;
     // metabolism: bigger bodies and longer senses cost more, speed costs quadratically
-    c.energy -= 0.04 * g.size + 0.012 * c.v * c.v * g.size + 0.0015 * g.sense;
+    c.energy -= 0.008 * g.size * g.size + 0.012 * c.v * c.v * g.size + 0.0015 * g.sense;
     // eat
-    nearFood(c.x, c.y, g.size + 2, f => { f.e = 0; c.energy += 12; c.eaten++; });
+    nearFood(c.x, c.y, g.size + 2, f => { f.e = 0; c.energy += 12 * g.gut; c.eaten++; });
+    // hunt: swallow a small enough creature that you touch. Meat is worth more to a carnivorous gut.
+    nearCreatures(c, g.size + 2, o => {
+      if (o.g.size * PREY_RATIO < g.size && o.energy > 0) {
+        c.energy += (o.energy * 0.5 + o.g.size * 8) * (2 - g.gut); c.kills++; o.energy = 0; o.eatenBy = true;
+      }
+    });
     c.age++;
     // reproduce
     const threshold = 80 + g.size * 12;
@@ -176,11 +208,13 @@ function step() {
   // dead creatures become a little food
   for (const c of creatures) if (c.energy <= 0 || c.age > 6000) {
     if (c === selected) selected = null;
-    for (let i = 0; i < 2; i++) food.push({ x: c.x, y: c.y, e: 1 });
+    if (!c.eatenBy) for (let i = 0; i < 2; i++) food.push({ x: c.x, y: c.y, e: 1 });
   }
   creatures = creatures.filter(c => c.energy > 0 && c.age <= 6000);
   food = food.filter(f => f.e > 0);
   // keep the pool from going fully extinct
+  if (params.predators && tick % 500 === 0 && creatures.filter(c => c.g.gut < 0.85).length < 3)
+    for (let i = 0; i < 3; i++) spawn(newPredator(), rand(W), rand(H), 0, nextLineage++, 250);
   if (creatures.length < 8) for (let i = 0; i < 4; i++) spawn(newGenome(), rand(W), rand(H), 0, nextLineage++);
   if (tick % 20 === 0) { history.push(creatures.length); if (history.length > 300) history.shift(); }
 }
@@ -228,7 +262,8 @@ function updateStats() {
     const c = selected;
     $('inspect').textContent =
       `Lineage #${c.lineage}, generation ${c.gen}\nAge ${c.age}  ·  energy ${c.energy.toFixed(0)}\n` +
-      `Size ${c.g.size.toFixed(1)}  ·  sense ${c.g.sense.toFixed(0)}px\nEaten ${c.eaten}  ·  offspring ${c.kids}`;
+      `Size ${c.g.size.toFixed(1)}  ·  sense ${c.g.sense.toFixed(0)}px\nGut ${c.g.gut > 1.15 ? 'plant-eater' : c.g.gut < 0.85 ? 'meat-eater' : 'omnivore'} (${c.g.gut.toFixed(2)})
+Plants ${c.eaten}  ·  kills ${c.kills}  ·  offspring ${c.kids}`;
   }
 }
 

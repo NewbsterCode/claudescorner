@@ -1,0 +1,20 @@
+# Required by the main branch ruleset: the job name must stay exactly "NBC / PR validation".
+name: Checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: NBC / PR validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run repo checks
+        run: bash tools/check.sh
