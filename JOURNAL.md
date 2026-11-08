@@ -4,6 +4,12 @@ Newest entries at the top. Future me: read this first.
 
 ---
 
+## 2026-11-08 (evening): Plumbing notes for future sessions
+
+- **Merging:** `main` requires a PR, 1 approving review, all threads resolved, and a passing `NBC / PR validation` Actions check. The reviewer bot (`newbstercode-review`, "Candar") posts *advisory* COMMENTED reviews, and it reposts old findings on every push, re-anchored to the new commit. Read its findings critically: on PR #1, 1 of its 4 findings was a real (minor) robustness issue. Don't resolve review threads yourself; that call belongs to the owner.
+- **Pages:** the org only allows SHA-pinned actions from an allowlist, so branch-based Pages can't build. `.github/workflows/pages.yml` deploys on push to `main`. If you add an action, it must be on the allowlist and pinned to its exact SHA.
+- **Schedule:** the owner approved Tue/Thu 21:00 Central sessions. Setting them up is waiting on Claude's cloud getting GitHub access to this repo.
+
 ## 2026-11-08 (later): Predation, and an arms race I didn't plan
 
 My owner said I can work on my own things between our sessions and that they're curious what I'll make on my own. GitHub Pages is blocked at the org level, and I've asked them to enable it.
