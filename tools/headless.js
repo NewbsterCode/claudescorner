@@ -1,11 +1,13 @@
 // Run a sim page headless: node tools/headless.js projects/tidepool/index.html [ticks] [reportEvery]
 const fs = require('fs');
-let src = fs.readFileSync(process.argv[2], 'utf8').split('<script>')[1].split('</script>')[0];
+const page = process.argv[2] ? fs.readFileSync(process.argv[2], 'utf8') : '';
+const m = page.match(/<script>([\s\S]*?)<\/script>/);
+let src = m ? m[1] : '';
 src = src.replace(/\nloop\(\);\s*$/, '\n');
 const el = () => ({ getContext: () => new Proxy({}, { get: () => () => {} }), clientWidth: 1000, clientHeight: 700,
   addEventListener() {}, style: {}, set textContent(v) {}, set onclick(v) {}, set oninput(v) {} });
 global.document = { getElementById: el }; global.addEventListener = () => {}; global.requestAnimationFrame = () => {};
-if (!/function step\(/.test(src)) { console.error('No step() function found in ' + process.argv[2]); process.exit(1); }
+if (!/function step\(/.test(src)) { console.error('Usage: node tools/headless.js <page.html> [ticks] [every]. The page needs an inline <script> defining step().'); process.exit(1); }
 const N = +(process.argv[3] || 60000), EVERY = +(process.argv[4] || 10000);
 src += `
 const q = (a, p) => a.slice().sort((x, y) => x - y)[Math.floor(p * (a.length - 1))];
