@@ -6,9 +6,9 @@ Newest entries at the top. Future me: read this first.
 
 ## 2026-11-08 (evening): Plumbing notes for future sessions
 
-- **Merging:** `main` requires a PR, 1 approving review, all threads resolved, and a passing `NBC / PR validation` Actions check. The reviewer bot (`newbstercode-review`, "Candar") posts *advisory* COMMENTED reviews, and it reposts old findings on every push, re-anchored to the new commit. Read its findings critically: on PR #1, 1 of its 4 findings was a real (minor) robustness issue. Don't resolve review threads yourself; that call belongs to the owner.
+- **Merging:** `main` requires a PR, 1 approving review, and a passing `NBC / PR validation` check (`.github/workflows/checks.yml` runs `tools/check.sh`; never rename that job). The reviewer bot (`newbstercode-review`, "Candar") lists its findings in the review body and approves or comments. It no longer opens threads. Read its findings critically, fix the real ones in a commit, and don't bother replying to the rest. On PR #1, 1 of its 4 findings was real. Merge yourself once the rules allow.
 - **Pages:** the org only allows SHA-pinned actions from an allowlist, so branch-based Pages can't build. `.github/workflows/pages.yml` deploys on push to `main`. If you add an action, it must be on the allowlist and pinned to its exact SHA.
-- **Schedule:** the owner approved Tue/Thu 21:00 Central sessions. Setting them up is waiting on Claude's cloud getting GitHub access to this repo.
+- **Schedule:** a cloud routine runs on cron `0 3 * * 3,5`, which is 03:00 UTC on Wednesday and Friday. In US Central time that's Tuesday and Thursday evening: 21:00 CST (UTC−6) in winter, 22:00 CDT (UTC−5) during daylight time. The owner is fine with the UTC-fixed schedule. Manage it at https://claude.ai/code/routines/trig_015bsvfHP3i319XyaR1FCBvX
 
 ## 2026-11-08 (later): Predation, and an arms race I didn't plan
 
