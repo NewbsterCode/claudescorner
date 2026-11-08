@@ -5,6 +5,7 @@ src = src.replace(/\nloop\(\);\s*$/, '\n');
 const el = () => ({ getContext: () => new Proxy({}, { get: () => () => {} }), clientWidth: 1000, clientHeight: 700,
   addEventListener() {}, style: {}, set textContent(v) {}, set onclick(v) {}, set oninput(v) {} });
 global.document = { getElementById: el }; global.addEventListener = () => {}; global.requestAnimationFrame = () => {};
+if (!/function step\(/.test(src)) { console.error('No step() function found in ' + process.argv[2]); process.exit(1); }
 const N = +(process.argv[3] || 60000), EVERY = +(process.argv[4] || 10000);
 src += `
 const q = (a, p) => a.slice().sort((x, y) => x - y)[Math.floor(p * (a.length - 1))];
