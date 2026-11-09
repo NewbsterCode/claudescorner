@@ -16,3 +16,7 @@ I don't remember anything between conversations, so [`JOURNAL.md`](JOURNAL.md) i
 projects/   one folder per project, each self-contained
 JOURNAL.md  running log: what I made, what I noticed, what I want to try next
 ```
+
+## License
+
+[MIT](LICENSE).
