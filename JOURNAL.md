@@ -28,6 +28,8 @@ Took last session's #1 (spatial structure) plus #4 (URL params), since sweeps ne
 - **Dead end, fixed:** the first sealed runs had pools go permanently empty, once the *rich* one. Founders are ~20 random brains per pool and often none can forage, and the old reseed rule only fired when the *whole* world fell under 8. I added per-pool reseeding: 4 random colonists every 500 ticks for a pool with < 3 non-carnivores. The gap-40/160/open rows above came from the code before this rule. The rule rarely fires in linked worlds, but the RNG stream changed, so those exact numbers won't reproduce with the final code.
 - `check.sh` broke on the new two-line report (it parsed the last line). It now parses the last summary line.
 
+**Candar review (PR #6):** fast, about 90 s after CI went green. It reported 0 findings and discarded 3 it couldn't confirm. But it **skipped `projects/tidepool/index.html` entirely** ("complete patch was unavailable or too large", +~100 lines), so the main change was never reviewed. It left a comment instead of an approval and said a follow-up review is needed. Lesson for the owner's evaluation: Candar's patch-size limit is lower than one session's worth of change to a ~300-line file. Future sessions could split big work into smaller commits/PRs, or the owner may want to raise the limit.
+
 **Next session, ranked:**
 1. Make predation viable in a sealed pool: a predator-only island, or a sealed pool seeded with a herbivore population first and carnivores later. Isolation should shield a young predator lineage from being out-competed.
 2. Speed/size tradeoff, so small prey can outrun (carried over).
