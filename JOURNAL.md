@@ -4,6 +4,39 @@ Newest entries at the top. Future me: read this first.
 
 ---
 
+## 2026-11-11 (second session): Predators that win by giving up meat
+
+Took last session's #1: can isolation shield a young predator lineage? Before starting I checked request issue #7. The owner approved PR #6 by hand and raised Candar's patch limit from 14 KB to 40 KB, with model context raised from 16k to 32k so big batches don't get silently truncated. The issue is closed.
+
+**Built.** Tidepool URL params for invasion experiments: `invade=T` (release the 8 seeded predators at tick T, not at the start), `ipool=i` (only into pool i), `ibrain=random|local` (random brains, or brains copied from residents of that pool, so the invaders can at least swim), `reseed=0` (one shot, no topping up), and `vexp=E` (top speed ∝ (size/3)^−E; the default 0.5 is the old 1/√size). A **Release predators** button and a "Release into" pool selector run the same experiment in the browser. Defaults are unchanged, and seed=1 output is identical to before (checked; the RNG call order was kept on purpose). `tools/headless.js` now prints an `invaders` line: descendants alive, deepest generation, median size and gut, kills, and how many are still carnivores (gut < 0.85).
+
+**Results** (sealed pools, 1000×700, 80k ticks, seeds 1–4; release at tick 20k unless noted):
+
+| condition | invader lineage still alive at 80k | carnivores among them |
+|---|---|---|
+| released at 0, one shot | 0/4 (all dead before 10k) | – |
+| rich pool, random brains | 1/4 (seed 3, gen 139) | 0 |
+| rich pool, borrowed brains | 1/4 (seed 3, gen 106) | 0 |
+| middle pool, borrowed brains | 0/4 | – |
+| poor pool, borrowed brains | 0/4 | – |
+| rich pool, `vexp=0` (size doesn't slow you) | 0/4 | – |
+| rich pool, `vexp=-0.25` (big = fast) | 0/4 | – |
+| rich pool, reseeding on, vexp 0 / 0.5 | only fresh founders (gen ≤ 3), except seed 3 again | 0 apart from the reseeded 3 |
+
+- **The two "successes" aren't predators.** In seed 3 the rich-pool residents were small (median size 5.0 at release). The invaders (size 7–8.5) ate them, and within 10k ticks the invaders' median gut went from 0.53–0.60 to 1.40–1.45. They took the pool by eating it, then turned herbivore and stayed. Pool A's lineage count dropped to 1: all invader stock. Conquest, then conversion. Classic overexploitation, with no prey left to specialize on.
+- **Why the rest starve** (I followed all 24 founders in seeds 1, 2, 4 to death): every founder splits within ~100 ticks (it starts with 250 energy against a breeding threshold of ~176), then dies at age 128–504 after **0–5 kills** (median 1). A size-8 carnivore burns ~0.9 energy/tick and a kill pays ~100, so it needs about one kill per 110 ticks. It gets one per ~250 at best. In seeds 1 and 2 most rich-pool residents (size 6–7.6) were simply too big to swallow (prey must be < size/1.25 ≈ 6.4).
+- **Speed isn't the bottleneck.** Making big bodies just as fast or faster made things slightly worse (0/8). Faster also costs more (speed cost ∝ v²·size), and random brains run flat out.
+- Last session's hypothesis ("isolation shields predators") is **not supported** as stated. Isolation lets a predator lineage *persist* only by abandoning predation.
+
+**Candar review:** see the PR; notes added after it runs.
+
+**Next session, ranked:**
+1. Make meat specialization pay off nonlinearly: e.g. gut efficiency ∝ gut² or a fixed "can't digest plants below gut 0.7" rule, so a converted predator can't fall back on plants halfway. That should stop conquest-then-conversion and might allow a real predator-prey cycle.
+2. Prey that refills: release predators into a pool with immigration (gap 40) so prey are topped up from neighbours, a source-sink setup.
+3. Brain visualizer for the selected creature (carried over twice now).
+4. Patchy/seasonal food in the poor pool, to test long senses (carried over).
+5. Gap-width sweep where size divergence collapses (carried over).
+
 ## 2026-11-11: Three pools, and gene flow wins
 
 Took last session's #1 (spatial structure) plus #4 (URL params), since sweeps need both.
