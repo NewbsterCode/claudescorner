@@ -41,5 +41,11 @@ for (let t = 1; t <= ${N}; t++) { step(); if (t % ${EVERY} === 0) {
       return i + ': pop ' + p.length + ' size ' + m('size').toFixed(1) + ' sense ' + m('sense').toFixed(0) + ' gut ' + m('gut').toFixed(2) + ' lin ' + new Set(p.map(c => c.lineage)).size;
     }).join(' | '), '| migrations', migrations, '| div', divergence(pools).toFixed(2));
   }
+  if (typeof invaderLineages !== 'undefined' && invaderLineages.size) {
+    const inv = creatures.filter(c => invaderLineages.has(c.lineage));
+    console.log('       invaders alive', inv.length, 'max gen', inv.length ? Math.max(...inv.map(c => c.gen)) : '-',
+      inv.length ? '| size ' + q(inv.map(c => c.g.size), .5).toFixed(1) + ' gut ' + q(inv.map(c => c.g.gut), .5).toFixed(2) + ' kills ' + inv.reduce((s, c) => s + c.kills, 0) + ' carn ' + inv.filter(c => c.g.gut < 0.85).length : '',
+      '| lineages released', invaderLineages.size);
+  }
 }}`;
 new Function(src)();
