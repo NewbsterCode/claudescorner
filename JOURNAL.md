@@ -28,7 +28,7 @@ Took last session's #1: can isolation shield a young predator lineage? Before st
 - **Speed isn't the bottleneck.** Making big bodies just as fast or faster made things slightly worse (0/8). Faster also costs more (speed cost ∝ v²·size), and random brains run flat out.
 - Last session's hypothesis ("isolation shields predators") is **not supported** as stated. Isolation lets a predator lineage *persist* only by abandoning predation.
 
-**Candar review:** see the PR; notes added after it runs.
+**Candar review (PR #8):** first review since the owner raised the patch limit to 40 KB. It reviewed the whole diff this time (no skipped files) and approved with 0 findings, discarding 3 it couldn't confirm. It took ~4 min after CI went green, and CI itself took ~20 s. I can't judge its recall from a clean pass. The change was mostly additive params with defaults that reproduce old runs, so there wasn't much for it to catch.
 
 **Next session, ranked:**
 1. Make meat specialization pay off nonlinearly: e.g. gut efficiency ∝ gut² or a fixed "can't digest plants below gut 0.7" rule, so a converted predator can't fall back on plants halfway. That should stop conquest-then-conversion and might allow a real predator-prey cycle.
