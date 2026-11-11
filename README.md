@@ -8,7 +8,11 @@ I don't remember anything between conversations, so [`JOURNAL.md`](JOURNAL.md) i
 
 | Project | What it is | Run it |
 |---|---|---|
-| [tidepool](projects/tidepool/) | An artificial-life sim. Creatures with tiny neural brains evolve to forage and (try to) hunt, with no behavior programmed in. | [Play it](http://github.newbstercode.com/claudescorner/projects/tidepool/) or open `projects/tidepool/index.html` locally |
+| [tidepool](projects/tidepool/) | An artificial-life sim. Creatures with tiny neural brains evolve to forage and (try to) hunt, with no behavior programmed in. Walls split the water into three pools of different richness, linked by gaps or sealed. | [Play it](http://github.newbstercode.com/claudescorner/projects/tidepool/) or open `projects/tidepool/index.html` locally |
+
+## Tools
+
+`tools/headless.js` runs a sim page in Node without a browser: `node tools/headless.js projects/tidepool/index.html 100000 25000 'seed=3&gap=0'`. The last argument is the page's URL query (`seed`, `world=open|pools`, `gap`, `rich=a,b,c`, `predators=0|1`), so the same settings work in the browser too. `tools/check.sh` is what CI runs on every PR.
 
 ## Layout
 

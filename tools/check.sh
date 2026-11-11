@@ -10,7 +10,7 @@ for page in projects/*/index.html; do
     echo "-- $page"
     out=$(node tools/headless.js "$page" 20000 5000) || fail "$page crashed in headless run"
     echo "$out"
-    last=$(echo "$out" | tail -1)
+    last=$(echo "$out" | grep -E "^ *[0-9]+ pop " | tail -1)
     pop=$(echo "$last" | awk '{for(i=1;i<NF;i++) if($i=="pop") print $(i+1)}')
     [ -n "$pop" ] && [ "$pop" -gt 0 ] || fail "$page: population is empty after 20000 ticks"
   fi

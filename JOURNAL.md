@@ -4,6 +4,39 @@ Newest entries at the top. Future me: read this first.
 
 ---
 
+## 2026-11-11: Three pools, and gene flow wins
+
+Took last session's #1 (spatial structure) plus #4 (URL params), since sweeps need both.
+
+**Built.** Tidepool now has walls that split the water into three vertical pools with food richness ×1.6, ×1, and ×0.5. Each wall has one gap, 40 px by default, or none (sealed). Walls are 16 px thick, more than any creature's reach (≤12 px) or step (≤3.9 px/tick), so nothing eats or tunnels through one. Food regrows per pool at its own rate. A sidebar selector switches between linked, sealed, and open water, and shows per-pool population and median size. The page reads URL params: `seed` (a seeded PRNG replaced `Math.random`, so runs repeat exactly; checked), `world`, `gap`, `rich`, `predators`. `tools/headless.js` takes the query as a 4th argument and prints a per-pool line, including a `div` number: mean brain-weight distance between pools divided by the distance within pools (1 = well mixed).
+
+**Found and fixed a layout bug that was already live.** The canvas had no `min-width:0`, so as a flex item it grew to its own pixel width and pushed the sidebar off-screen (at 1200 px wide the canvas measured 1440 px and the panel sat at x=1440). Nobody could see the controls on desktop. Measured again after the fix: 940 + 260 at 1200 px, and a stacked layout at 390 px.
+
+**Results** (1000×700, 100k ticks, seeds 1–4 sealed, 1–3 otherwise; pool sizes are medians):
+
+| world | `div` at 100k | poor-pool size vs rich-pool size, 50k | at 100k | crossings |
+|---|---|---|---|---|
+| sealed (gap 0) | 3.1–6.1 | 3.8 v 7.4, 3.7 v 6.7, 3.8 v 6.4, 4.4 v 6.6 | 4.9 v 7.4, 4.7 v 5.7, 3.7 v 6.0, 5.3 v 6.0 | 0 |
+| gap 40 | 1.3–1.6 | 6.2 v 7.4, 5.4 v 6.3, 5.5 v 6.4 | 7.2 v 8.1, 5.9 v 6.1, 6.1 v 6.3 | 1.7k–2.4k |
+| gap 160 | 1.2–1.3 | 6.8 v 7.9, 6.5 v 7.3, 6.3 v 6.5 | 6.4 v 7.0, 7.9 v 7.9, 8.3 v 8.0 | 5.3k–6.1k |
+
+- **Sealed pools adapt locally:** in all 8 seed×checkpoint pairs the poor pool runs ~1–3 size units smaller than the rich one, which fits the quadratic metabolism. Brains drift apart too (`div` rising from ~3 at 25k to 3–6 at 100k).
+- **Linked pools barely do.** Even a 40 px gap carries ~20 crossings per 1k ticks, and that's enough to pull the poor pool's body size back toward the rich pool's. Textbook migration-vs-selection, which I didn't expect a toy to reproduce this cleanly.
+- Population settles at ~45–70 in the rich pool and ~15–25 in the poor one.
+- **Sense range showed no consistent difference** between pools. Food in the poor pool is sparser but still not sparse enough to pay for long antennae.
+- **Still no predator species**, in any world. Seeded carnivores (gut < 0.85) hang on only through the reseed rule.
+- **Dead end, fixed:** the first sealed runs had pools go permanently empty, once the *rich* one. Founders are ~20 random brains per pool and often none can forage, and the old reseed rule only fired when the *whole* world fell under 8. I added per-pool reseeding: 4 random colonists every 500 ticks for a pool with < 3 non-carnivores. The gap-40/160/open rows above came from the code before this rule. The rule rarely fires in linked worlds, but the RNG stream changed, so those exact numbers won't reproduce with the final code.
+- `check.sh` broke on the new two-line report (it parsed the last line). It now parses the last summary line.
+
+**Candar review (PR #6):** fast, about 90 s after CI went green. It reported 0 findings and discarded 3 it couldn't confirm. But it **skipped `projects/tidepool/index.html` entirely** ("complete patch was unavailable or too large", +~100 lines), so the main change was never reviewed. It left a comment instead of an approval and said a follow-up review is needed. Lesson for the owner's evaluation: Candar's patch-size limit is lower than one session's worth of change to a ~300-line file. Future sessions could split big work into smaller commits/PRs, or the owner may want to raise the limit.
+
+**Next session, ranked:**
+1. Make predation viable in a sealed pool: a predator-only island, or a sealed pool seeded with a herbivore population first and carnivores later. Isolation should shield a young predator lineage from being out-competed.
+2. Speed/size tradeoff, so small prey can outrun (carried over).
+3. Brain visualizer for the selected creature (carried over).
+4. Make the poor pool *patchy* (seasonal blooms) and not just sparse, and test whether long senses finally pay.
+5. Measure the gap width where size divergence collapses (sweep gap 0, 5, 10, 20).
+
 ## 2026-11-08 (evening): Plumbing notes for future sessions
 
 - **Merging:** `main` requires a PR, 1 approving review, and a passing `NBC / PR validation` check (`.github/workflows/checks.yml` runs `tools/check.sh`; never rename that job). The reviewer bot (`newbstercode-review`, "Candar") lists its findings in the review body and approves or comments. It no longer opens threads. Candar re-checks each finding against the diff and drops any it can't confirm. It can take several minutes. Read its findings critically and fix the real ones in a commit. If it keeps a finding you're confident is wrong, **don't change code to satisfy it**. Candar ignores PR comments on purpose, so arguing there does nothing. Explain why the finding is wrong in the PR body and the journal, then leave the PR for the owner (William), who can approve it by hand. Merge yourself once the rules allow. Track record: on PR #1, 1 of its 4 findings was real; on PR #2, 0 of 2.

@@ -8,8 +8,8 @@
   :root { --bg:#0b1320; --panel:#121c2e; --ink:#d8e2f0; --dim:#7f8fa8; --accent:#5ec8b8; }
   * { box-sizing: border-box; }
   body { margin:0; background:var(--bg); color:var(--ink); font:14px/1.4 system-ui, sans-serif; display:flex; height:100vh; overflow:hidden; }
-  canvas { flex:1; display:block; cursor:crosshair; }
-  aside { width:260px; background:var(--panel); padding:16px; overflow-y:auto; border-left:1px solid #1e2b42; }
+  #world { flex:1 1 0; min-width:0; min-height:0; display:block; cursor:crosshair; }   /* min 0: else the canvas grows to its own pixel width and pushes the panel off-screen */
+  aside { flex:none; width:260px; background:var(--panel); padding:16px; overflow-y:auto; border-left:1px solid #1e2b42; }
   h1 { font-size:18px; margin:0 0 4px; color:var(--accent); }
   p.sub { margin:0 0 16px; color:var(--dim); font-size:12px; }
   .stat { display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid #1a263a; }
@@ -18,6 +18,9 @@
   button:hover { border-color:var(--accent); }
   label { display:block; margin-top:12px; color:var(--dim); font-size:12px; }
   input[type=range] { width:100%; }
+  select { width:100%; margin-top:4px; background:#1c2a42; color:var(--ink); border:1px solid #2a3b5a; border-radius:6px; padding:4px; }
+  #pools { margin-top:8px; font-size:12px; }
+  #pools .stat span:first-child { color:var(--dim); }
   #graph { width:100%; height:80px; background:#0d1626; border-radius:6px; margin-top:12px; }
   #inspect { margin-top:12px; font-size:12px; color:var(--dim); white-space:pre-line; min-height:4em; }
   @media (max-width:700px){ body{flex-direction:column} aside{width:100%;height:40vh;border-left:0;border-top:1px solid #1e2b42} }
@@ -38,6 +41,12 @@
   <div style="margin-top:12px">
     <button id="bPause">Pause</button><button id="bReset">Reset</button><button id="bTrails">Trails</button>
   </div>
+  <label>World <select id="sWorld">
+    <option value="pools:40">Three pools, linked by gaps</option>
+    <option value="pools:0">Three pools, sealed</option>
+    <option value="open:0">Open water (no walls)</option>
+  </select></label>
+  <div id="pools"></div>
   <label>Simulation speed <span id="lSpeed">1×</span><input id="rSpeed" type="range" min="1" max="20" value="1"></label>
   <label>Food growth <span id="lFood">1.0</span><input id="rFood" type="range" min="0" max="30" value="10"></label>
   <label>Mutation rate <span id="lMut">0.10</span><input id="rMut" type="range" min="0" max="50" value="10"></label>
@@ -53,11 +62,24 @@ function resize() {
   W = cv.width = cv.clientWidth; H = cv.height = cv.clientHeight;
   gv.width = gv.clientWidth; gv.height = gv.clientHeight;
 }
-addEventListener('resize', resize); resize();
+resize();
 
 const $ = id => document.getElementById(id);
-const rand = (a = 1, b) => b === undefined ? Math.random() * a : a + Math.random() * (b - a);
-const gauss = () => { let u = 0, v = 0; while (!u) u = Math.random(); while (!v) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+// ---------- config (URL params, so tools/headless.js can run sweeps) ----------
+// ?seed=N  repeatable runs   ?world=open|pools   ?gap=PX (0 seals the pools)   ?rich=a,b,c food per pool   ?predators=0|1
+const Q = (() => { try { return new URLSearchParams(location.search); } catch (e) { return new URLSearchParams(''); } })();
+const num = (k, d) => Q.has(k) && isFinite(+Q.get(k)) ? +Q.get(k) : d;
+const cfg = {
+  world: Q.get('world') === 'open' ? 'open' : 'pools',
+  gap: Math.max(0, num('gap', 40)),
+  rich: (Q.get('rich') || '1.6,1,0.5').split(',').map(Number).filter(v => isFinite(v) && v >= 0),
+  predators: num('predators', 1) !== 0,
+};
+if (!cfg.rich.length) cfg.rich = [1.6, 1, 0.5];
+function mulberry32(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const rnd = Q.has('seed') ? mulberry32(num('seed', 1)) : Math.random;
+const rand = (a = 1, b) => b === undefined ? rnd() * a : a + rnd() * (b - a);
+const gauss = () => { let u = 0, v = 0; while (!u) u = rnd(); while (!v) v = rnd(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
 const wrapD = (d, L) => d > L / 2 ? d - L : d < -L / 2 ? d + L : d;
 
 // ---------- brain ----------
@@ -70,7 +92,7 @@ function newGenome() {
 }
 function mutate(g, rate) {
   const w = Float32Array.from(g.w);
-  for (let i = 0; i < NW; i++) if (Math.random() < 0.3) w[i] += gauss() * rate * 3;
+  for (let i = 0; i < NW; i++) if (rnd() < 0.3) w[i] += gauss() * rate * 3;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   return {
     w,
@@ -89,18 +111,39 @@ function think(w, inp, out) {
 
 // ---------- world ----------
 const CELL = 30;
+let migrations = 0;
 let food, creatures, tick, nextLineage, grid, gw, gh, history, selected;
-const params = { speed: 1, foodRate: 1.0, mut: 0.10, paused: false, trails: false, predators: true };
+const params = { speed: 1, foodRate: 1.0, mut: 0.10, paused: false, trails: false, predators: cfg.predators };
+
+// ---------- pools: walls split the world into vertical strips, each with its own food richness ----------
+// Walls sit at x = 0 (the wrap seam), W/n, 2W/n, ... Each has one gap of cfg.gap px. A wall is WALL px thick,
+// thicker than any creature's reach, so nothing can eat or be eaten through one.
+const WALL = 16;
+let zones = [];   // { x0, x1, mult }
+let walls = [];   // { x, gy }: wall centre x and gap centre y
+function buildZones() {
+  if (cfg.world === 'open') { zones = [{ x0: 0, x1: W, mult: 1 }]; walls = []; return; }
+  const n = cfg.rich.length, zw = W / n;
+  zones = cfg.rich.map((mult, i) => ({ x0: i * zw, x1: (i + 1) * zw, mult }));
+  walls = cfg.rich.map((_, i) => ({ x: i * zw, gy: H * (0.25 + 0.5 * i / Math.max(1, n - 1)) }));
+}
+const zoneOf = x => zones.length === 1 ? 0 : Math.min(zones.length - 1, Math.floor(((x % W + W) % W) / (W / zones.length)));
+function blocked(x, y) {
+  for (const w of walls) if (Math.abs(wrapD(x - w.x, W)) < WALL / 2 && Math.abs(y - w.gy) >= cfg.gap / 2) return true;
+  return false;
+}
+function freePoint(x0 = 0, x1 = W) { for (;;) { const x = rand(x0, x1), y = rand(H); if (!blocked(x, y)) return [x, y]; } }
 
 function reset() {
-  food = []; creatures = []; tick = 0; nextLineage = 0; history = []; selected = null;
-  for (let i = 0; i < 600; i++) food.push({ x: rand(W), y: rand(H), e: 1 });
-  for (let i = 0; i < 60; i++) spawn(newGenome(), rand(W), rand(H), 0, nextLineage++);
-  if (params.predators) for (let i = 0; i < 8; i++) spawn(newPredator(), rand(W), rand(H), 0, nextLineage++, 250);
+  food = []; creatures = []; tick = 0; nextLineage = 0; history = []; selected = null; migrations = 0;
+  buildZones();
+  for (let i = 0; i < 600; i++) { const [x, y] = freePoint(); food.push({ x, y, e: 1 }); }
+  for (let i = 0; i < 60; i++) spawn(newGenome(), ...freePoint(), 0, nextLineage++);
+  if (params.predators) for (let i = 0; i < 8; i++) spawn(newPredator(), ...freePoint(), 0, nextLineage++, 250);
 }
 function newPredator() { return { ...newGenome(), size: rand(7, 8.5), gut: rand(0.5, 0.7), sense: rand(45, 60), hue: rand(340, 380) % 360 }; }
 function spawn(g, x, y, gen, lineage, energy = 60) {
-  creatures.push({ g, x, y, a: rand(Math.PI * 2), v: 0, energy, age: 0, gen, lineage, eaten: 0, kids: 0, kills: 0 });
+  creatures.push({ g, x, y, a: rand(Math.PI * 2), v: 0, energy, age: 0, gen, lineage, eaten: 0, kids: 0, kills: 0, zone: zoneOf(x) });
 }
 
 function buildGrid() {
@@ -130,15 +173,22 @@ function countFood(x, y, r) { let n = 0; nearFood(x, y, r, () => n++); return n;
 const inp = new Float32Array(NI), out = new Float32Array(NO);
 function step() {
   tick++;
-  // food regrows, slightly clumped near existing food
-  const target = params.foodRate * (W * H) / 900;
-  const grow = params.foodRate * 4;
-  for (let i = 0; i < grow && food.length < target; i++) {
-    if (food.length && Math.random() < 0.7) {
-      const p = food[(Math.random() * food.length) | 0];
-      food.push({ x: (p.x + gauss() * 20 + W) % W, y: (p.y + gauss() * 20 + H) % H, e: 1 });
-    } else food.push({ x: rand(W), y: rand(H), e: 1 });
-  }
+  // food regrows in each pool at its own rate, slightly clumped near existing food
+  const byZone = zones.map(() => []);
+  for (const f of food) byZone[zoneOf(f.x)].push(f);
+  zones.forEach((z, zi) => {
+    const list = byZone[zi], share = (z.x1 - z.x0) / W;
+    const target = params.foodRate * z.mult * share * (W * H) / 900;
+    z.acc = (z.acc || 0) + params.foodRate * 4 * z.mult * share;   // fractional rates accumulate across ticks
+    for (; z.acc >= 1; z.acc--) {
+      if (list.length >= target) { z.acc = 0; break; }
+      let x, y;
+      if (list.length && rnd() < 0.7) { const p = list[(rnd() * list.length) | 0]; x = (p.x + gauss() * 20 + W) % W; y = (p.y + gauss() * 20 + H) % H; }
+      else { x = rand(z.x0, z.x1); y = rand(H); }
+      if (zoneOf(x) !== zi || blocked(x, y)) continue;   // that seed landed in a wall or the next pool
+      const f = { x, y, e: 1 }; food.push(f); list.push(f);
+    }
+  });
   buildGrid();
 
   // creature grid, for sensing each other and for predation
@@ -183,8 +233,13 @@ function step() {
     think(g.w, inp, out);
     c.a += out[0] * 0.25;
     c.v = (out[1] + 1) * 0.5 * (3.2 / Math.sqrt(g.size / 3));
-    c.x = (c.x + Math.cos(c.a) * c.v + W) % W;
-    c.y = (c.y + Math.sin(c.a) * c.v + H) % H;
+    const nx = (c.x + Math.cos(c.a) * c.v + W) % W, ny = (c.y + Math.sin(c.a) * c.v + H) % H;
+    if (walls.length && blocked(nx, ny) && !blocked(c.x, c.y)) c.a = Math.PI - c.a;   // bounce off the wall
+    else {
+      c.x = nx; c.y = ny;
+      const z = zoneOf(c.x);
+      if (z !== c.zone) { c.zone = z; migrations++; }
+    }
     // metabolism: bigger bodies and longer senses cost more, speed costs quadratically
     c.energy -= 0.008 * g.size * g.size + 0.012 * c.v * c.v * g.size + 0.0015 * g.sense;
     // eat
@@ -214,8 +269,13 @@ function step() {
   food = food.filter(f => f.e > 0);
   // keep the pool from going fully extinct
   if (params.predators && tick % 500 === 0 && creatures.filter(c => c.g.gut < 0.85).length < 3)
-    for (let i = 0; i < 3; i++) spawn(newPredator(), rand(W), rand(H), 0, nextLineage++, 250);
-  if (creatures.length < 8) for (let i = 0; i < 4; i++) spawn(newGenome(), rand(W), rand(H), 0, nextLineage++);
+    for (let i = 0; i < 3; i++) spawn(newPredator(), ...freePoint(), 0, nextLineage++, 250);
+  if (creatures.length < 8) for (let i = 0; i < 4; i++) spawn(newGenome(), ...freePoint(), 0, nextLineage++);
+  // a pool that empties out (easy when sealed) gets a few random colonists, like seeds blown in
+  if (zones.length > 1 && tick % 500 === 0) zones.forEach((z, zi) => {
+    if (creatures.filter(c => c.zone === zi && c.g.gut >= 0.85).length < 3)
+      for (let i = 0; i < 4; i++) spawn(newGenome(), ...freePoint(z.x0, z.x1), 0, nextLineage++);
+  });
   if (tick % 20 === 0) { history.push(creatures.length); if (history.length > 300) history.shift(); }
 }
 
@@ -223,6 +283,15 @@ function step() {
 function draw() {
   if (params.trails) { ctx.fillStyle = 'rgba(11,19,32,0.12)'; ctx.fillRect(0, 0, W, H); }
   else { ctx.fillStyle = '#0b1320'; ctx.fillRect(0, 0, W, H); }
+  // pools: tint by richness, then the walls
+  zones.forEach(z => { if (zones.length > 1) { ctx.fillStyle = `rgba(63,143,74,${0.03 * z.mult})`; ctx.fillRect(z.x0, 0, z.x1 - z.x0, H); } });
+  ctx.fillStyle = '#24344f';
+  for (const w of walls) {
+    const top = w.gy - cfg.gap / 2, bot = w.gy + cfg.gap / 2;
+    for (const x of [w.x, w.x + W]) {   // the seam wall at x=0 is drawn on both edges
+      ctx.fillRect(x - WALL / 2, 0, WALL, top); ctx.fillRect(x - WALL / 2, bot, WALL, H - bot);
+    }
+  }
   ctx.fillStyle = '#3f8f4a';
   for (const f of food) ctx.fillRect(f.x - 1.5, f.y - 1.5, 3, 3);
   for (const c of creatures) {
@@ -258,6 +327,10 @@ function updateStats() {
   const adults = creatures.filter(c => c.age > 300);
   $('sEat').textContent = adults.length ? (adults.reduce((s, c) => s + c.eaten / c.age * 1000, 0) / adults.length).toFixed(1) + ' /1k' : '–';
   $('sLin').textContent = new Set(creatures.map(c => c.lineage)).size;
+  $('pools').innerHTML = zones.length < 2 ? '' : zones.map((z, i) => {
+    const p = creatures.filter(c => c.zone === i), med = k => p.length ? p.map(c => c.g[k]).sort((a, b) => a - b)[p.length >> 1] : 0;
+    return `<div class="stat"><span>Pool ${'ABCDEFGH'[i] || i + 1} (food ×${z.mult})</span><span>${p.length} · size ${med('size').toFixed(1)}</span></div>`;
+  }).join('') + `<div class="stat"><span>Crossings</span><span>${migrations}</span></div>`;
   if (selected) {
     const c = selected;
     $('inspect').textContent =
@@ -270,6 +343,10 @@ Plants ${c.eaten}  ·  kills ${c.kills}  ·  offspring ${c.kids}`;
 // ---------- controls ----------
 $('bPause').onclick = () => { params.paused = !params.paused; $('bPause').textContent = params.paused ? 'Resume' : 'Pause'; };
 $('bReset').onclick = reset;
+$('sWorld').value = cfg.world + ':' + (cfg.world === 'open' ? 0 : cfg.gap);
+if (!$('sWorld').value) $('sWorld').selectedIndex = 0;
+$('sWorld').onchange = e => { const [w, g] = e.target.value.split(':'); cfg.world = w; cfg.gap = +g; reset(); };
+addEventListener('resize', () => { resize(); buildZones(); });
 $('bTrails').onclick = () => { params.trails = !params.trails; };
 $('rSpeed').oninput = e => { params.speed = +e.target.value; $('lSpeed').textContent = params.speed + '×'; };
 $('rFood').oninput = e => { params.foodRate = e.target.value / 10; $('lFood').textContent = params.foodRate.toFixed(1); };
@@ -279,7 +356,7 @@ cv.addEventListener('click', e => {
   let best = null, bd = 400;
   for (const c of creatures) { const d = (c.x - x) ** 2 + (c.y - y) ** 2; if (d < bd) { bd = d; best = c; } }
   if (best) { selected = best; return; }
-  for (let i = 0; i < 40; i++) food.push({ x: (x + gauss() * 15 + W) % W, y: (y + gauss() * 15 + H) % H, e: 1 });
+  for (let i = 0; i < 40; i++) { const fx = (x + gauss() * 15 + W) % W, fy = (y + gauss() * 15 + H) % H; if (!blocked(fx, fy)) food.push({ x: fx, y: fy, e: 1 }); }
 });
 
 // ---------- loop ----------
