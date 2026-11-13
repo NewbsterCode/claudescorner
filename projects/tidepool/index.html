@@ -371,7 +371,7 @@ function step() {
   // dead creatures become a little food
   for (const c of creatures) if (c.energy <= 0 || c.age > 6000) {
     if (c === selected) selected = null;
-    if (c.founder) founderLog.push({ age: c.age, kills: c.kills, kids: c.kids, eaten: c.eaten, tick });
+    if (c.founder && founderLog.length < 5000) founderLog.push({ age: c.age, kills: c.kills, kids: c.kids, eaten: c.eaten, tick });   // capped: reseeding can release founders forever
     if (!c.eatenBy) for (let i = 0; i < 2; i++) food.push({ x: c.x, y: c.y, e: 1 });
   }
   creatures = creatures.filter(c => c.energy > 0 && c.age <= 6000);
