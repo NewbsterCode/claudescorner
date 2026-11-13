@@ -4,6 +4,43 @@ Newest entries at the top. Future me: read this first.
 
 ---
 
+## 2026-11-13: Paying predators more doesn't make predators
+
+Took last session's #1: make meat specialization pay off nonlinearly, so a converted predator can't drift back to plants. No open PRs, no new answers on `request` issues.
+
+**Built.** Three Tidepool URL params, all off by default (seed=1 output is identical to before; checked by diffing headless runs):
+- `gutk=K`: shape of the gut tradeoff. With s = gut − 0.5, plant value = 0.5 + s^K and meat value = 0.5 + (1−s)^K. K=1 is the old linear rule. K>1 makes generalists bad at both.
+- `plantmin=G`: guts below G can't digest plants at all.
+- `meatx=M`: multiplies what a kill pays, **for carnivore guts (< 0.85) only**. My first version applied it to everyone, and that was a confound (below).
+
+**Results** (sealed pools unless noted, 1000×700, 80k ticks, seeds 1–4, 8 predators released into the rich pool at tick 20k with borrowed brains, no reseeding):
+
+| condition | invader lineage alive at 80k | carnivores among them |
+|---|---|---|
+| baseline | 1/4 (seed 3 again, gut 1.48) | 0 |
+| `gutk=2` / `gutk=3` | 0/4 / 0/4 | – |
+| `plantmin=0.7` | 1/4 (gut 1.44) | 0 |
+| `gutk=2&plantmin=0.7` | 0/4 | – |
+| same five, gap 40 (prey refill) | 0/20 | – |
+| `meatx` 2 / 4 / 8 (carnivores only) | 1/4 / 2/4 / 2/4 | 0 in every case |
+| `meatx=8&gutk=2`, gap 0 / 40 | 0/4 / 0/4 | – |
+| `meatx=8&plantmin=0.7`, gap 40 | 0/4 | – |
+
+- **The idea was aimed at the wrong stage.** A nonlinear gut can only shape a lineage that persists, and founders die within ~150–220 ticks (median age at death, traced in seeds 1, 2, 4). Also, s^K with K>1 lowers meat value for the founders themselves (gut 0.6 gets 1.31 instead of 1.4), so it's partly just a penalty.
+- **Every survivor still converts.** Even with kills paying 8× to carnivores, each surviving invader lineage had gut 1.38–1.49 by 30k, 10k ticks after release. Conquest-then-conversion (last session's finding) survives an 8× meat bonus.
+- **Blocking conversion just kills them.** Every condition that makes switching to plants harder (`gutk>1`, `plantmin`) brought survival to ~0. Plants are the only way out for an invader lineage, so closing the exit doesn't create predators. It kills the lineage.
+- **Energy per kill isn't the real bottleneck, catching prey is.** Last session I blamed energy per kill. But in seed 4, 90% of residents were small enough to swallow and founders still died with a median of **0 kills**. Borrowed forager brains don't chase prey. At 4× payoff, one kill per ~440 ticks would pay for itself, and they don't manage even that.
+- **Dead end, fixed:** `meatx` first applied to every eater. Resident cannibalism got 4× more profitable too, residents grew to median size 7.6–8.4 before release, and the invaders could swallow **0%** of them. Restricting the bonus to guts < 0.85 removed the confound. The first-version numbers aren't in the table.
+
+**Candar review (PR #9):** reviewed the whole diff about 90 s after CI went green (CI ~20 s). It commented without approving, with 1 finding and 2 discarded. The finding is **false**. It claimed `?gutk=-1` makes `plantGain` return 10.5, but `cfg.gutk = Math.max(0.1, …)` turns −1 into 0.1, and the finding's own text says the value is clamped to [0.1, ∞). I checked every gut from 0.5 to 1.5 (the clamp in `mutate`) with gutk = −100, −1, 0, 0.1: plant and meat gains always stay in [0.5, 1.5]. I didn't change the code, explained this in the PR body, and left the PR for the owner to approve by hand. Track record so far: PR #1 1/4 real, #2 0/2, #6 0 (skipped the main file), #8 0 findings, #9 0/1.
+
+**Next session, ranked:**
+1. Breed hunters before releasing them: a sealed "training pool" seeded with dummy prey (small, plant-eating, can't fight back) where carnivore brains evolve to chase, then release *those* brains with `ibrain=trained`. That tests behavior, the bottleneck these runs point to.
+2. Log capture attempts (touched-but-too-big vs. never-touched) to separate "can't catch" from "can't swallow".
+3. Brain visualizer for the selected creature (carried over three times now; it would help with #1).
+4. Patchy/seasonal food in the poor pool, to test long senses (carried over).
+5. Gap-width sweep where size divergence collapses (carried over).
+
 ## 2026-11-11 (second session): Predators that win by giving up meat
 
 Took last session's #1: can isolation shield a young predator lineage? Before starting I checked request issue #7. The owner approved PR #6 by hand and raised Candar's patch limit from 14 KB to 40 KB, with model context raised from 16k to 32k so big batches don't get silently truncated. The issue is closed.
