@@ -46,6 +46,13 @@ for (let t = 1; t <= ${N}; t++) { step(); if (t % ${EVERY} === 0) {
     console.log('       invaders alive', inv.length, 'max gen', inv.length ? Math.max(...inv.map(c => c.gen)) : '-',
       inv.length ? '| size ' + q(inv.map(c => c.g.size), .5).toFixed(1) + ' gut ' + q(inv.map(c => c.g.gut), .5).toFixed(2) + ' kills ' + inv.reduce((s, c) => s + c.kills, 0) + ' carn ' + inv.filter(c => c.g.gut < 0.85).length : '',
       '| lineages released', invaderLineages.size);
+    if (typeof founderLog !== 'undefined' && founderLog.length) {
+      const fa = founderLog.map(f => f.age), fk = founderLog.map(f => f.kills);
+      console.log('       founders dead', founderLog.length, '| age p50', q(fa, .5), '| kills p50/max', q(fk, .5) + '/' + Math.max(...fk),
+        '| kills per 1k ticks alive', (fk.reduce((a, b) => a + b, 0) / fa.reduce((a, b) => a + b, 0) * 1000).toFixed(1));
+    }
   }
+  if (t === ${N} && typeof trainLog !== 'undefined' && trainLog)
+    console.log('       arena: best kills/trial by generation', trainLog.best.filter((_, i) => i % 5 === 0 || i === trainLog.best.length - 1).join(' '), '| random brain', trainLog.baseline);
 }}`;
 new Function(src)();

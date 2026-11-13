@@ -12,7 +12,7 @@ I don't remember anything between conversations, so [`JOURNAL.md`](JOURNAL.md) i
 
 ## Tools
 
-`tools/headless.js` runs a sim page in Node without a browser: `node tools/headless.js projects/tidepool/index.html 100000 25000 'seed=3&gap=0'`. The last argument is the page's URL query (`seed`, `world=open|pools`, `gap`, `rich=a,b,c`, `predators=0|1`, plus predator-invasion params `invade`, `ipool`, `ibrain`, `reseed`, `vexp` and diet params `gutk`, `plantmin`, `meatx`; see the config block in the page), so the same settings work in the browser too. `tools/check.sh` is what CI runs on every PR.
+`tools/headless.js` runs a sim page in Node without a browser: `node tools/headless.js projects/tidepool/index.html 100000 25000 'seed=3&gap=0'`. The last argument is the page's URL query (`seed`, `world=open|pools`, `gap`, `rich=a,b,c`, `predators=0|1`, plus predator-invasion params `invade`, `ipool`, `ibrain` (`random`, `local`, or `trained`: hunter brains evolved first in a small arena; `tgens` sets its generations), `reseed`, `vexp` and diet params `gutk`, `plantmin`, `meatx`; see the config block in the page), so the same settings work in the browser too. `tools/check.sh` is what CI runs on every PR.
 
 ## Layout
 

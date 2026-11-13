@@ -48,6 +48,8 @@
     <option value="open:0">Open water (no walls)</option>
   </select></label>
   <label>Release into <select id="sIPool"><option value="-1">anywhere</option><option value="0">pool A (rich)</option><option value="1">pool B</option><option value="2">pool C (poor)</option></select></label>
+  <label>Predator brains <select id="sIBrain" title="Trained brains are bred in a small hunting arena first; takes a few seconds the first time">
+    <option value="random">random</option><option value="local">borrowed from residents</option><option value="trained">trained hunters</option></select></label>
   <div id="pools"></div>
   <label>Simulation speed <span id="lSpeed">1×</span><input id="rSpeed" type="range" min="1" max="20" value="1"></label>
   <label>Food growth <span id="lFood">1.0</span><input id="rFood" type="range" min="0" max="30" value="10"></label>
@@ -86,7 +88,7 @@ const cfg = {
   predators: num('predators', 1) !== 0,
   invade: Math.max(0, Math.floor(num('invade', 0))),
   ipool: Q.has('ipool') ? Math.floor(num('ipool', 0)) : -1,
-  ibrain: Q.get('ibrain') === 'local' ? 'local' : 'random',
+  ibrain: ['local', 'trained'].includes(Q.get('ibrain')) ? Q.get('ibrain') : 'random',
   reseed: num('reseed', 1) !== 0,
   vexp: num('vexp', 0.5),
   gutk: Math.max(0.1, num('gutk', 1)),
@@ -132,7 +134,7 @@ function think(w, inp, out) {
 
 // ---------- world ----------
 const CELL = 30;
-let migrations = 0, invaderLineages = new Set();
+let migrations = 0, invaderLineages = new Set(), founderLog = [], trainedLineages = new Set();   // founderLog: released predators at death
 let food, creatures, tick, nextLineage, grid, gw, gh, history, selected;
 const params = { speed: 1, foodRate: 1.0, mut: 0.10, paused: false, trails: false, predators: cfg.predators };
 
@@ -156,7 +158,7 @@ function blocked(x, y) {
 function freePoint(x0 = 0, x1 = W) { for (;;) { const x = rand(x0, x1), y = rand(H); if (!blocked(x, y)) return [x, y]; } }
 
 function reset() {
-  food = []; creatures = []; tick = 0; nextLineage = 0; history = []; selected = null; migrations = 0; invaderLineages = new Set();
+  food = []; creatures = []; tick = 0; nextLineage = 0; history = []; selected = null; migrations = 0; invaderLineages = new Set(); founderLog = []; trainedLineages = new Set();
   buildZones();
   for (let i = 0; i < 600; i++) { const [x, y] = freePoint(); food.push({ x, y, e: 1 }); }
   for (let i = 0; i < 60; i++) spawn(newGenome(), ...freePoint(), 0, nextLineage++);
@@ -171,10 +173,81 @@ function releasePredators(n) {
     if (cfg.ibrain === 'local') {   // borrow the brain of a resident of that pool, so the invader can at least swim and steer
       const z = zoneOf(x), locals = creatures.filter(c => c.zone === z && c.g.gut >= 0.85);
       if (locals.length) g.w = Float32Array.from(locals[(rnd() * locals.length) | 0].g.w);
+    } else if (cfg.ibrain === 'trained') {   // a brain bred in the hunter arena (trained once, then reused)
+      const t = trainLog || trainHunters();
+      g.w = Float32Array.from(t.brains[i % t.brains.length]);
+      trainedLineages.add(nextLineage);
     }
     invaderLineages.add(nextLineage);
     spawn(g, x, y, 0, nextLineage++, 250);
+    creatures[creatures.length - 1].founder = true;
   }
+}
+// ---------- hunter training arena (?ibrain=trained) ----------
+// Borrowed forager brains don't chase prey, so before release we evolve hunting brains in a small, empty arena:
+// one hunter at a time among harmless drifting prey (size 3-4.5, never fight back, respawn when eaten) and
+// plants at the main world's density. Same senses, same think(), same speed/turn rules as the real world.
+// Fitness = kills in TRAIN_T ticks. (mu+lambda) evolution: keep the best quarter, refill with mutants.
+// Uses its own seeded PRNG, so the main world's random stream stays exactly as it would be with ibrain=random.
+const TRAIN_POP = 16, TRAIN_GENS = num('tgens', 30), TRAIN_T = 500, AR = 360;
+let trainLog = null;   // { gens, best: [kills per generation], brains: [...] }
+function trainHunters() {
+  const r = mulberry32(Q.has('seed') ? num('seed', 1) * 7919 + 13 : (Math.random() * 2 ** 32) | 0), rr = (a, b) => a + r() * (b - a);
+  const gs = () => { let u = 0, v = 0; while (!u) u = r(); while (!v) v = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+  const wd = d => d > AR / 2 ? d - AR : d < -AR / 2 ? d + AR : d;
+  const mk = () => { const w = new Float32Array(NW); for (let i = 0; i < NW; i++) w[i] = gs() * 0.8; return w; };
+  const mut = w => { const m = Float32Array.from(w); for (let i = 0; i < NW; i++) if (r() < 0.3) m[i] += gs() * 0.3; return m; };
+  const ti = new Float32Array(NI), to = new Float32Array(NO);
+  function trial(w, size, sense) {
+    const prey = Array.from({ length: 14 }, () => ({ x: rr(0, AR), y: rr(0, AR), a: rr(0, 6.28), s: rr(3, 4.5) }));
+    const plants = Array.from({ length: Math.round(AR * AR / 900) }, () => [rr(0, AR), rr(0, AR)]);
+    const h = { x: AR / 2, y: AR / 2, a: 0, e: 150 }; let kills = 0;
+    const cnt = (x, y, rad) => { let n = 0; for (const p of plants) { const dx = wd(p[0] - x), dy = wd(p[1] - y); if (dx * dx + dy * dy < rad * rad) n++; } return n; };
+    for (let t = 0; t < TRAIN_T; t++) {
+      for (const p of prey) { p.a += gs() * 0.2; p.x = (p.x + Math.cos(p.a) * 1.2 + AR) % AR; p.y = (p.y + Math.sin(p.a) * 1.2 + AR) % AR; }
+      const s = sense, ca = Math.cos(h.a), sa = Math.sin(h.a);
+      ti[0] = Math.min(1, cnt(h.x + Math.cos(h.a - 0.6) * s, h.y + Math.sin(h.a - 0.6) * s, s * 0.6) / 4);
+      ti[1] = Math.min(1, cnt(h.x + Math.cos(h.a + 0.6) * s, h.y + Math.sin(h.a + 0.6) * s, s * 0.6) / 4);
+      ti[2] = Math.min(1, cnt(h.x + ca * s * 2, h.y + sa * s * 2, s * 0.8) / 6);
+      let pl = 0, pr = 0, crowd = 0;
+      for (const p of prey) {
+        const dx = wd(p.x - h.x), dy = wd(p.y - h.y), d = Math.hypot(dx, dy);
+        if (d >= s * 1.5) continue;
+        crowd++;
+        if (dx * ca + dy * sa > 0) { if (ca * dy - sa * dx < 0) pl += 1 - d / (s * 1.5); else pr += 1 - d / (s * 1.5); }
+      }
+      ti[3] = Math.min(1, pl); ti[4] = Math.min(1, pr); ti[5] = 0; ti[6] = Math.min(1, crowd / 6);
+      ti[7] = Math.min(1, h.e / 150); ti[8] = 1;
+      think(w, ti, to);
+      h.a += to[0] * 0.25;
+      const v = (to[1] + 1) * 0.5 * 3.2 * Math.pow(size / 3, -cfg.vexp);
+      h.x = (h.x + Math.cos(h.a) * v + AR) % AR; h.y = (h.y + Math.sin(h.a) * v + AR) % AR;
+      h.e = Math.max(0, h.e - (0.008 * size * size + 0.012 * v * v * size + 0.0015 * sense));
+      for (const p of prey) {
+        const dx = wd(p.x - h.x), dy = wd(p.y - h.y);
+        if (dx * dx + dy * dy < (size + 2) ** 2) { kills++; h.e += 60; p.x = rr(0, AR); p.y = rr(0, AR); }
+      }
+    }
+    return kills;
+  }
+  // every brain is scored on the same three body plans, so fitness doesn't depend on a lucky body
+  const bodies = [[7, 45], [7.75, 52], [8.5, 60]];
+  const score = w => bodies.reduce((s, b) => s + trial(w, b[0], b[1]), 0) / bodies.length;
+  let pop = Array.from({ length: TRAIN_POP }, () => ({ w: mk() }));
+  const best = [];
+  for (let gen = 0; gen < TRAIN_GENS; gen++) {
+    for (const b of pop) if (b.f === undefined) b.f = score(b.w);
+    pop.sort((a, b) => b.f - a.f);
+    best.push(+pop[0].f.toFixed(1));
+    const keep = pop.slice(0, TRAIN_POP / 4);
+    pop = keep.concat(Array.from({ length: TRAIN_POP - keep.length }, (_, i) => ({ w: mut(keep[i % keep.length].w) })));
+  }
+  for (const b of pop) if (b.f === undefined) b.f = score(b.w);
+  pop.sort((a, b) => b.f - a.f);
+  // what a random brain scores in the same arena, for comparison
+  const baseline = Array.from({ length: 8 }, () => score(mk())).reduce((a, b) => a + b, 0) / 8;
+  trainLog = { gens: TRAIN_GENS, best, baseline: +baseline.toFixed(1), brains: pop.slice(0, TRAIN_POP / 4).map(b => b.w) };
+  return trainLog;
 }
 function newPredator() { return { ...newGenome(), size: rand(7, 8.5), gut: rand(0.5, 0.7), sense: rand(45, 60), hue: rand(340, 380) % 360 }; }
 function spawn(g, x, y, gen, lineage, energy = 60) {
@@ -298,6 +371,7 @@ function step() {
   // dead creatures become a little food
   for (const c of creatures) if (c.energy <= 0 || c.age > 6000) {
     if (c === selected) selected = null;
+    if (c.founder && founderLog.length < 5000) founderLog.push({ age: c.age, kills: c.kills, kids: c.kids, eaten: c.eaten, tick });   // capped: reseeding can release founders forever
     if (!c.eatenBy) for (let i = 0; i < 2; i++) food.push({ x: c.x, y: c.y, e: 1 });
   }
   creatures = creatures.filter(c => c.energy > 0 && c.age <= 6000);
@@ -372,7 +446,8 @@ function updateStats() {
     $('inspect').textContent =
       `Lineage #${c.lineage}, generation ${c.gen}\nAge ${c.age}  ·  energy ${c.energy.toFixed(0)}\n` +
       `Size ${c.g.size.toFixed(1)}  ·  sense ${c.g.sense.toFixed(0)}px\nGut ${c.g.gut > 1.15 ? 'plant-eater' : c.g.gut < 0.85 ? 'meat-eater' : 'omnivore'} (${c.g.gut.toFixed(2)})
-Plants ${c.eaten}  ·  kills ${c.kills}  ·  offspring ${c.kids}`;
+Plants ${c.eaten}  ·  kills ${c.kills}  ·  offspring ${c.kids}` +
+      (invaderLineages.has(c.lineage) ? `\nReleased predator lineage${trainedLineages.has(c.lineage) && trainLog ? ` (arena-bred: ${trainLog.best[trainLog.best.length - 1]} kills/trial vs ${trainLog.baseline} for a random brain)` : ''}` : '');
   }
 }
 
@@ -385,7 +460,13 @@ $('sWorld').onchange = e => { const [w, g] = e.target.value.split(':'); cfg.worl
 addEventListener('resize', () => { resize(); buildZones(); });
 $('sIPool').value = String(cfg.ipool); if (!$('sIPool').value) $('sIPool').value = '-1';
 $('sIPool').onchange = e => { cfg.ipool = +e.target.value; };
-$('bInvade').onclick = () => releasePredators(8);
+$('sIBrain').value = cfg.ibrain;
+$('sIBrain').onchange = e => { cfg.ibrain = e.target.value; };
+$('bInvade').onclick = () => {
+  if (cfg.ibrain !== 'trained' || trainLog) return releasePredators(8);
+  $('bInvade').textContent = 'Training hunters…';   // the arena blocks for a few seconds the first time; let the label paint first
+  setTimeout(() => { releasePredators(8); $('bInvade').textContent = 'Release predators'; }, 30);
+};
 $('bTrails').onclick = () => { params.trails = !params.trails; };
 $('rSpeed').oninput = e => { params.speed = +e.target.value; $('lSpeed').textContent = params.speed + '×'; };
 $('rFood').oninput = e => { params.foodRate = e.target.value / 10; $('lFood').textContent = params.foodRate.toFixed(1); };
