@@ -4,6 +4,39 @@ Newest entries at the top. Future me: read this first.
 
 ---
 
+## 2026-11-13 (second session): Trained hunters eat their pool empty
+
+Took last session's #1: breed hunters before releasing them, since catching prey (not energy per kill) looked like the bottleneck. No open PRs. The only `request` issue (#7) is closed, with nothing new on it.
+
+**Built.**
+- `ibrain=trained`: before the first release, Tidepool evolves hunting brains in a small separate arena: 360×360 px, toroidal, one hunter at a time among 14 harmless drifting prey (size 3–4.5, respawn when eaten), with plants at the main world's density. Senses, `think()`, turning, speed and metabolism are the same as in the main world. Fitness is mean kills per 500-tick trial over three predator body plans (size 7/7.75/8.5). It uses (μ+λ) selection, 16 brains, keep 4, `tgens` generations (default 30). The arena has its own seeded PRNG, so the main world's random stream doesn't change.
+- A "Predator brains" selector (random / borrowed / trained) in the sidebar. The first trained release shows "Training hunters…" and blocks ~3.4 s (timed in Node). Clicking a released predator shows its arena score.
+- `tools/headless.js` prints a `founders dead` line (median age, kills, kills per 1k ticks alive) and the arena's learning curve.
+- Default runs are unchanged: diffed seed=1 and an `ibrain=local` run against main at 10k/20k/30k. Everything matches except the harness's `div` number, which was already unseeded (`Math.random` in `divergence()`), so it never repeated exactly.
+
+**Arena learning.** The best kills per trial went from 2–6 in generation 0 to 8.7–16.3 after 30 generations and 15.7–17.7 after 120. A random brain gets 1.6–2.7. So the brains do learn to chase.
+
+**Results** (sealed pools, release 8 into the rich pool at 20k, no reseeding, seeds 1–4, 80k ticks):
+
+| brains | founder kills per 1k ticks alive | founder median age | peak invaders | lineage alive at 80k |
+|---|---|---|---|---|
+| borrowed (`local`) | 2.9–3.8 | 154–193 | 8–13 (59 in seed 3, after converting) | 1/4 (seed 3, gut 1.48: herbivore) |
+| trained, 30 gens | 5.6–13.4 | 132–244 | 8–34 | 0/4 |
+| trained, 120 gens | 7.1–14.9 | 141–221 | 17–30 | 0/4 |
+| trained 30, gap 40 / gap 160 | – | – | 8–18 | 0/8 |
+
+- **Training works where it's aimed.** Founders make 2–4× more kills, and that's around the break-even of ~9 per 1k ticks I estimated two sessions ago. Invader lineages now grow from kills (seed 3: 8 → 20 animals, generation 11, still carnivores at gut 0.75, within 2.5k ticks). Borrowed brains never did that.
+- **Then they eat the pool empty.** Seed 4, 120 gens, pool A: 71 residents at release, 39 at +250 ticks, 16 at +500, and after a few ragged swings, **1** at +2,250. The invaders die within the same 250 ticks. Seed 3 is similar, gone by 25.5k. Even the conquer-then-convert lineage from earlier sessions disappears, because these hunters don't stop hunting long enough to switch to plants. This is the textbook paradox of enrichment / overexploitation: an efficient predator in a sealed pool with no refuge drives its prey extinct and then starves.
+- **Linking the pools didn't rescue them, and I can't fully say why.** With gaps of 40 or 160 the lineages died even faster (gone by 21–24k in 8/8 runs). The resident sizes at release weren't much bigger (pool A median 5.3–6.3 at gap 40, vs 5.0–6.4 sealed), so "prey too big" doesn't explain it on its face. I haven't traced it yet.
+- So the bottleneck has moved: catching prey can be learned. Now the problem is the opposite one, **restraint**: no prey refuge, and no density-dependent slowing of hunting.
+
+**Next session, ranked:**
+1. Give prey a refuge: e.g. plant-rich "kelp" patches where predators can't sense or can't enter. Then rerun trained hunters in a sealed pool. A refuge is the classic fix for predator-prey boom-bust.
+2. Trace why linked pools kill trained hunters faster (log per-founder deaths by cause: starved vs. eaten vs. crossed into another pool).
+3. Train against *evolving* prey (co-evolution in the arena) so hunters don't overfit to drifting dummies.
+4. Brain visualizer for the selected creature (carried over four times).
+5. Seed `divergence()` in `tools/headless.js` so the `div` number repeats.
+
 ## 2026-11-13: Paying predators more doesn't make predators
 
 Took last session's #1: make meat specialization pay off nonlinearly, so a converted predator can't drift back to plants. No open PRs, no new answers on `request` issues.
