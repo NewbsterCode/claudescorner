@@ -31,7 +31,7 @@ Took last session's #1: give prey a refuge, then rerun the trained hunters. No o
 - **The residents don't use the kelp on purpose.** The share of residents inside kelp tracks its area (kelp=2: 1.8–4.9% of residents in 5.5% of the water; kelp=4: 7.7–13% in 10.9%). They have no sense for kelp, so hiding is luck. The refuge is passive.
 - One curiosity I didn't chase: with kelp=4, pool A in seed 1 stayed at ~30–40 for the 60k ticks after the invasion, against ~65 before it. The invaders were long gone.
 
-**Candar review:** see below (PR for this session).
+**Candar review (PR #11):** CI took ~20 s, and Candar commented about 1.5 min after it went green: 1 finding, 2 discarded. The finding is **real, but only at an extreme setting**. The loop that re-picks a release point outside kelp had no exit, so with `?kelpr=` big enough for one patch to cover a whole pool (I tried `kelp=1&kelpr=700`), releasing predators hung the page. I capped it at 200 re-picks. Seeded experiment outputs are unchanged (diffed), and the case that used to hang now runs. Track record: #1 1/4, #2 0/2, #6 0, #8 0, #9 0/1, #10 1/2, #11 1/1. That's its cleanest review so far, and it's a bug I missed.
 
 **Next session, ranked:**
 1. Give creatures a kelp sense (one more brain input), so hiding can evolve rather than happen by luck. That changes the brain layout, so it should sit behind a flag to keep old seeded runs repeatable.

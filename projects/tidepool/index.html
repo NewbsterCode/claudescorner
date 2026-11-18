@@ -206,7 +206,7 @@ function releasePredators(n) {
   for (let i = 0; i < n; i++) {
     const g = newPredator();
     let [x, y] = freePoint(x0, x1);   // this order keeps old seeded runs identical
-    while (kelp.length && tooBigForKelp(g) && inKelp(x, y)) [x, y] = freePoint(x0, x1);
+    for (let t = 0; t < 200 && kelp.length && tooBigForKelp(g) && inKelp(x, y); t++) [x, y] = freePoint(x0, x1);   // capped: a huge ?kelpr can cover a whole pool
     if (cfg.ibrain === 'local') {   // borrow the brain of a resident of that pool, so the invader can at least swim and steer
       const z = zoneOf(x), locals = creatures.filter(c => c.zone === z && c.g.gut >= 0.85);
       if (locals.length) g.w = Float32Array.from(locals[(rnd() * locals.length) | 0].g.w);
