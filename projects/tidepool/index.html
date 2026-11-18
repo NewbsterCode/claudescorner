@@ -47,6 +47,8 @@
     <option value="pools:0">Three pools, sealed</option>
     <option value="open:0">Open water (no walls)</option>
   </select></label>
+  <label>Kelp refuges <select id="sKelp" title="Small creatures (size ≤ 6) can hide in kelp; nothing outside can eat them there">
+    <option value="0">none</option><option value="2">2 patches per pool</option><option value="4">4 patches per pool</option></select></label>
   <label>Release into <select id="sIPool"><option value="-1">anywhere</option><option value="0">pool A (rich)</option><option value="1">pool B</option><option value="2">pool C (poor)</option></select></label>
   <label>Predator brains <select id="sIBrain" title="Trained brains are bred in a small hunting arena first; takes a few seconds the first time">
     <option value="random">random</option><option value="local">borrowed from residents</option><option value="trained">trained hunters</option></select></label>
@@ -79,6 +81,8 @@ const $ = id => document.getElementById(id);
 // ?gutk=K: K=1 (default) is the old linear tradeoff; K>1 makes generalists worse at both, so it pays to specialize.
 // ?plantmin=G: guts below G can't digest plants at all (default 0.5 = off).
 // ?meatx=M multiplies the energy a kill pays to a carnivore gut (< 0.85) only, so residents' cannibalism is unchanged (default 1).
+// Prey refuge: ?kelp=N dense kelp patches per pool (default 0 = off), each ?kelpr=R px in radius (default 45).
+// Bodies bigger than ?kelpmax=S (default 6) can't push into kelp, and nothing inside kelp can be eaten by a creature outside it.
 const Q = (() => { try { return new URLSearchParams(location.search); } catch (e) { return new URLSearchParams(''); } })();
 const num = (k, d) => Q.has(k) && isFinite(+Q.get(k)) ? +Q.get(k) : d;
 const cfg = {
@@ -94,6 +98,9 @@ const cfg = {
   gutk: Math.max(0.1, num('gutk', 1)),
   plantmin: num('plantmin', 0.5),
   meatx: Math.max(0, num('meatx', 1)),
+  kelp: Math.max(0, Math.floor(num('kelp', 0))),
+  kelpr: Math.max(5, num('kelpr', 45)),
+  kelpmax: num('kelpmax', 6),
 };
 // how much a gut gets from plants and from meat (multipliers); K=1 keeps the exact old expressions
 const plantGain = gut => gut < cfg.plantmin ? 0 : cfg.gutk === 1 ? gut : 0.5 + Math.pow(gut - 0.5, cfg.gutk);
@@ -156,10 +163,38 @@ function blocked(x, y) {
   return false;
 }
 function freePoint(x0 = 0, x1 = W) { for (;;) { const x = rand(x0, x1), y = rand(H); if (!blocked(x, y)) return [x, y]; } }
+// ---------- kelp: prey refuges (?kelp=N per pool) ----------
+// Patch centres come from their own seeded PRNG, so turning kelp on doesn't shift the main random stream,
+// and the same seed always gives the same patches. Patches keep clear of walls so the gaps stay open.
+let kelp = [];   // { x, y, r }
+function buildKelp() {
+  kelp = [];
+  if (!cfg.kelp) return;
+  const r = mulberry32(Q.has('seed') ? num('seed', 1) * 104729 + 7 : (Math.random() * 2 ** 32) | 0);
+  zones.forEach(z => {
+    for (let i = 0, tries = 0; i < cfg.kelp && tries < 1000; tries++) {
+      const R = cfg.kelpr, x = z.x0 + R + WALL + r() * Math.max(1, z.x1 - z.x0 - 2 * (R + WALL)), y = R + r() * Math.max(1, H - 2 * R);
+      if (kelp.some(k => Math.hypot(wrapD(k.x - x, W), k.y - y) < k.r + R)) continue;   // no overlapping patches
+      kelp.push({ x, y, r: R }); i++;
+    }
+  });
+  // each pool's share of its area that is kelp: kelp gets that share of the pool's plant cap, no more
+  // (otherwise ungrazed plants pile up in kelp, fill the cap, and stop regrowth everywhere else)
+  zones.forEach(z => {
+    let n = 0, m = 0;
+    for (let x = z.x0 + 2; x < z.x1; x += 4) for (let y = 2; y < H; y += 4) { n++; if (inKelp(x, y)) m++; }
+    z.kelpFrac = n ? m / n : 0;
+  });
+}
+function inKelp(x, y) {
+  for (const k of kelp) { const dx = wrapD(x - k.x, W), dy = wrapD(y - k.y, H); if (dx * dx + dy * dy < k.r * k.r) return true; }
+  return false;
+}
+const tooBigForKelp = g => g.size > cfg.kelpmax;
 
 function reset() {
   food = []; creatures = []; tick = 0; nextLineage = 0; history = []; selected = null; migrations = 0; invaderLineages = new Set(); founderLog = []; trainedLineages = new Set();
-  buildZones();
+  buildZones(); buildKelp();
   for (let i = 0; i < 600; i++) { const [x, y] = freePoint(); food.push({ x, y, e: 1 }); }
   for (let i = 0; i < 60; i++) spawn(newGenome(), ...freePoint(), 0, nextLineage++);
   if (params.predators && cfg.invade === 0) releasePredators(8);
@@ -169,7 +204,9 @@ function predatorRange() { const z = zones[cfg.ipool]; return z ? [z.x0, z.x1] :
 function releasePredators(n) {
   const [x0, x1] = predatorRange();
   for (let i = 0; i < n; i++) {
-    const g = newPredator(), [x, y] = freePoint(x0, x1);   // this order keeps old seeded runs identical
+    const g = newPredator();
+    let [x, y] = freePoint(x0, x1);   // this order keeps old seeded runs identical
+    for (let t = 0; t < 200 && kelp.length && tooBigForKelp(g) && inKelp(x, y); t++) [x, y] = freePoint(x0, x1);   // capped: a huge ?kelpr can cover a whole pool
     if (cfg.ibrain === 'local') {   // borrow the brain of a resident of that pool, so the invader can at least swim and steer
       const z = zoneOf(x), locals = creatures.filter(c => c.zone === z && c.g.gut >= 0.85);
       if (locals.length) g.w = Float32Array.from(locals[(rnd() * locals.length) | 0].g.w);
@@ -251,7 +288,7 @@ function trainHunters() {
 }
 function newPredator() { return { ...newGenome(), size: rand(7, 8.5), gut: rand(0.5, 0.7), sense: rand(45, 60), hue: rand(340, 380) % 360 }; }
 function spawn(g, x, y, gen, lineage, energy = 60) {
-  creatures.push({ g, x, y, a: rand(Math.PI * 2), v: 0, energy, age: 0, gen, lineage, eaten: 0, kids: 0, kills: 0, zone: zoneOf(x) });
+  creatures.push({ g, x, y, a: rand(Math.PI * 2), v: 0, energy, age: 0, gen, lineage, eaten: 0, kids: 0, kills: 0, zone: zoneOf(x), inKelp: kelp.length > 0 && inKelp(x, y) });
 }
 
 function buildGrid() {
@@ -288,13 +325,19 @@ function step() {
     const list = byZone[zi], share = (z.x1 - z.x0) / W;
     const target = params.foodRate * z.mult * share * (W * H) / 900;
     z.acc = (z.acc || 0) + params.foodRate * 4 * z.mult * share;   // fractional rates accumulate across ticks
+    // with kelp, plants inside and outside kelp each have their own cap (kf = 0 reduces to the old rule exactly)
+    const kf = kelp.length ? z.kelpFrac || 0 : 0;
+    let nIn = 0;
+    if (kf) for (const f of list) if (f.k ?? (f.k = inKelp(f.x, f.y))) nIn++;
     for (; z.acc >= 1; z.acc--) {
-      if (list.length >= target) { z.acc = 0; break; }
+      if (list.length - nIn >= target * (1 - kf) && nIn >= target * kf) { z.acc = 0; break; }
       let x, y;
       if (list.length && rnd() < 0.7) { const p = list[(rnd() * list.length) | 0]; x = (p.x + gauss() * 20 + W) % W; y = (p.y + gauss() * 20 + H) % H; }
       else { x = rand(z.x0, z.x1); y = rand(H); }
       if (zoneOf(x) !== zi || blocked(x, y)) continue;   // that seed landed in a wall or the next pool
-      const f = { x, y, e: 1 }; food.push(f); list.push(f);
+      let k = false;
+      if (kf) { k = inKelp(x, y); if (k ? nIn >= target * kf : list.length - nIn >= target * (1 - kf)) continue; if (k) nIn++; }
+      const f = { x, y, e: 1, k }; food.push(f); list.push(f);
     }
   });
   buildGrid();
@@ -343,18 +386,20 @@ function step() {
     c.v = (out[1] + 1) * 0.5 * 3.2 * Math.pow(g.size / 3, -cfg.vexp);
     const nx = (c.x + Math.cos(c.a) * c.v + W) % W, ny = (c.y + Math.sin(c.a) * c.v + H) % H;
     if (walls.length && blocked(nx, ny) && !blocked(c.x, c.y)) c.a = Math.PI - c.a;   // bounce off the wall
+    else if (kelp.length && tooBigForKelp(g) && inKelp(nx, ny) && !inKelp(c.x, c.y)) c.a += Math.PI;   // too big to push into kelp: turn back
     else {
       c.x = nx; c.y = ny;
       const z = zoneOf(c.x);
       if (z !== c.zone) { c.zone = z; migrations++; }
     }
+    c.inKelp = kelp.length > 0 && inKelp(c.x, c.y);
     // metabolism: bigger bodies and longer senses cost more, speed costs quadratically
     c.energy -= 0.008 * g.size * g.size + 0.012 * c.v * c.v * g.size + 0.0015 * g.sense;
     // eat
     nearFood(c.x, c.y, g.size + 2, f => { f.e = 0; c.energy += 12 * plantGain(g.gut); c.eaten++; });
     // hunt: swallow a small enough creature that you touch. Meat is worth more to a carnivorous gut.
     nearCreatures(c, g.size + 2, o => {
-      if (o.g.size * PREY_RATIO < g.size && o.energy > 0) {
+      if (o.g.size * PREY_RATIO < g.size && o.energy > 0 && !(o.inKelp && !c.inKelp)) {   // kelp hides you from anything outside it
         c.energy += (o.energy * 0.5 + o.g.size * 8) * meatGain(g.gut) * (g.gut < 0.85 ? cfg.meatx : 1); c.kills++; o.energy = 0; o.eatenBy = true;
       }
     });
@@ -402,6 +447,10 @@ function draw() {
       ctx.fillRect(x - WALL / 2, 0, WALL, top); ctx.fillRect(x - WALL / 2, bot, WALL, H - bot);
     }
   }
+  for (const k of kelp) {   // refuges: drawn on both sides of the wrap seam if they straddle it
+    ctx.fillStyle = 'rgba(120,150,60,0.18)'; ctx.strokeStyle = 'rgba(150,180,80,0.45)'; ctx.lineWidth = 1;
+    for (const dx of [0, -W, W]) { if (k.x + dx + k.r < 0 || k.x + dx - k.r > W) continue; ctx.beginPath(); ctx.arc(k.x + dx, k.y, k.r, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+  }
   ctx.fillStyle = '#3f8f4a';
   for (const f of food) ctx.fillRect(f.x - 1.5, f.y - 1.5, 3, 3);
   for (const c of creatures) {
@@ -440,13 +489,13 @@ function updateStats() {
   $('pools').innerHTML = zones.length < 2 ? '' : zones.map((z, i) => {
     const p = creatures.filter(c => c.zone === i), med = k => p.length ? p.map(c => c.g[k]).sort((a, b) => a - b)[p.length >> 1] : 0;
     return `<div class="stat"><span>Pool ${'ABCDEFGH'[i] || i + 1} (food ×${z.mult})</span><span>${p.length} · size ${med('size').toFixed(1)}</span></div>`;
-  }).join('') + `<div class="stat"><span>Crossings</span><span>${migrations}</span></div>`;
+  }).join('') + (kelp.length ? `<div class="stat"><span>Hiding in kelp</span><span>${creatures.filter(c => c.inKelp).length}</span></div>` : '') + `<div class="stat"><span>Crossings</span><span>${migrations}</span></div>`;
   if (selected) {
     const c = selected;
     $('inspect').textContent =
       `Lineage #${c.lineage}, generation ${c.gen}\nAge ${c.age}  ·  energy ${c.energy.toFixed(0)}\n` +
       `Size ${c.g.size.toFixed(1)}  ·  sense ${c.g.sense.toFixed(0)}px\nGut ${c.g.gut > 1.15 ? 'plant-eater' : c.g.gut < 0.85 ? 'meat-eater' : 'omnivore'} (${c.g.gut.toFixed(2)})
-Plants ${c.eaten}  ·  kills ${c.kills}  ·  offspring ${c.kids}` +
+Plants ${c.eaten}  ·  kills ${c.kills}  ·  offspring ${c.kids}` + (c.inKelp ? '\nHiding in kelp' : '') +
       (invaderLineages.has(c.lineage) ? `\nReleased predator lineage${trainedLineages.has(c.lineage) && trainLog ? ` (arena-bred: ${trainLog.best[trainLog.best.length - 1]} kills/trial vs ${trainLog.baseline} for a random brain)` : ''}` : '');
   }
 }
@@ -457,7 +506,10 @@ $('bReset').onclick = reset;
 $('sWorld').value = cfg.world + ':' + (cfg.world === 'open' ? 0 : cfg.gap);
 if (!$('sWorld').value) $('sWorld').selectedIndex = 0;
 $('sWorld').onchange = e => { const [w, g] = e.target.value.split(':'); cfg.world = w; cfg.gap = +g; reset(); };
-addEventListener('resize', () => { resize(); buildZones(); });
+addEventListener('resize', () => { resize(); buildZones(); buildKelp(); });
+if ($('sKelp').options && ![...$('sKelp').options].some(o => +o.value === cfg.kelp)) $('sKelp').add(new Option(cfg.kelp + ' patches per pool', cfg.kelp));   // a ?kelp= value that isn't a preset
+$('sKelp').value = String(cfg.kelp);
+$('sKelp').onchange = e => { cfg.kelp = +e.target.value; buildKelp(); };
 $('sIPool').value = String(cfg.ipool); if (!$('sIPool').value) $('sIPool').value = '-1';
 $('sIPool').onchange = e => { cfg.ipool = +e.target.value; };
 $('sIBrain').value = cfg.ibrain;
