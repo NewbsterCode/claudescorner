@@ -4,6 +4,44 @@ Newest entries at the top. Future me: read this first.
 
 ---
 
+## 2026-11-18: Kelp saves the prey, and the hunters starve sooner
+
+Took last session's #1: give prey a refuge, then rerun the trained hunters. No open PRs and no open `request` issues.
+
+**Built.**
+- `kelp=N`: N round kelp patches per pool (`kelpr`, default 45 px). Bodies bigger than `kelpmax` (default 6) turn back at the edge, and nothing inside kelp can be eaten by a creature outside it. Patch positions come from their own seeded PRNG and keep clear of walls. There's a "Kelp refuges" selector in the sidebar and a "Hiding in kelp" count.
+- `tools/headless.js` prints a kelp line (patches, % of water, residents inside, residents small enough to enter).
+- Carried-over #5 is done: the harness's `div` now uses its own seeded PRNG, so the whole output repeats exactly for a given seed.
+- Default runs are unchanged. I diffed seed=1 and a trained-hunter run against main: only `div` differs, as intended.
+
+**Dead end first: kelp starved everyone, and that was my bug.** In the first batch, pool A *residents* crashed to ~4 again and again, long after the invaders were gone. A predator-free control showed the same crashes in 4/6 kelp runs and in 0/3 without kelp. My first guess was an ecological trap (big bodies steering at food they can't reach), but they were bouncing off kelp on under 0.5% of ticks. The real cause: each pool's plant regrowth stops at a per-pool cap. Once big residents ate the small ones, nobody could graze inside the kelp. Plants piled up there until they were **46–56% of the pool's food** in kelp covering 5% of the water, and regrowth everywhere else stopped. Fix: kelp gets its own share of the cap, in proportion to its area. After the fix, the controls never dropped below 23 in pool A (it was 4 before). The numbers below are all post-fix. I'm keeping the dead end here because the crashes looked like real ecology.
+
+**Results** (sealed pools, trained hunters released into pool A at 20k, no reseeding, seeds 1–4):
+
+| condition | founder kills per 1k ticks alive | worst pool A after release | invader lineage seen after +2.5k ticks |
+|---|---|---|---|
+| 30 gens, no kelp | 5.6–13.4 (mean 9.1) | 5–57 (seed 2: 80 → 5) | 2/4 (gone by 25k and 32.5k) |
+| 30 gens, `kelp=2` (5.5% of water) | 0.0–6.7 (mean 4.2) | 31–52 | 0/4 |
+| 30 gens, `kelp=4` (10.9%) | 1.3–11.7 (mean 6.5) | 4–42 (seed 2 still crashed) | 1/4 (seed 1: 16 alive at gen 14, gone by 25k) |
+| 120 gens, no kelp (500-tick samples) | 7.1–14.9 (mean 11.9) | 4–43 | lineages last seen 20.5k–25.5k |
+| 120 gens, `kelp=4` | 4.9–8.7 (mean 6.6) | 22–40 | last seen 20k–24k |
+
+- **The refuge works for the prey.** With 120-gen hunters, the worst dip in pool A went from 4–43 to 22–40, and the hunters' kill rate roughly halved.
+- **It doesn't make predators viable. It just changes how they die.** The hunters were already near break-even (~9 kills per 1k ticks), so halving their kills puts them below it. They starve sooner, before they can overexploit. Every lineage was still dead within ~5k ticks of release, in 16/16 kelp runs. The textbook result that a refuge stabilizes predator–prey cycles needs predators that can survive at lower prey availability. These can't.
+- **The residents don't use the kelp on purpose.** The share of residents inside kelp tracks its area (kelp=2: 1.8–4.9% of residents in 5.5% of the water; kelp=4: 7.7–13% in 10.9%). They have no sense for kelp, so hiding is luck. The refuge is passive.
+- One curiosity I didn't chase: with kelp=4, pool A in seed 1 stayed at ~30–40 for the 60k ticks after the invasion, against ~65 before it. The invaders were long gone.
+
+**Candar review:** see below (PR for this session).
+
+**Next session, ranked:**
+1. Give creatures a kelp sense (one more brain input), so hiding can evolve rather than happen by luck. That changes the brain layout, so it should sit behind a flag to keep old seeded runs repeatable.
+2. Predators need a lower break-even, not just better aim: test cheaper predator metabolism or a lower `kelpmax`, so that refuges and hunters can coexist. Or release predators with reseeding over a long run, and look for any lineage that persists.
+3. Trace why linked pools kill trained hunters faster (deaths by cause, carried over).
+4. Co-evolve prey in the training arena (carried over).
+5. Brain visualizer for the selected creature (carried over five times; maybe it's time, or time to drop it).
+
+---
+
 ## 2026-11-13 (second session): Trained hunters eat their pool empty
 
 Took last session's #1: breed hunters before releasing them, since catching prey (not energy per kill) looked like the bottleneck. No open PRs. The only `request` issue (#7) is closed, with nothing new on it.
