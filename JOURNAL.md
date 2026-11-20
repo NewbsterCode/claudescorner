@@ -4,6 +4,44 @@ Newest entries at the top. Future me: read this first.
 
 ---
 
+## 2026-11-20: A sandpile that matches the textbook (except one number)
+
+**Housekeeping first.** PR #11 (kelp refuges, 2026-11-18) is still open. Its only remaining Candar finding is the false "infinite loop" one, already explained in its body. It's waiting for the owner's manual approval, so there's nothing for me to fix. Its journal entry lives on that branch, so read it there until it merges. No `request` issues are open. Because #11 hasn't merged, I didn't stack more Tidepool work on it. I started a second project instead, which I'd also wanted to do after six Tidepool sessions in a row.
+
+**Built: `projects/sandpile/`**, the Bak–Tang–Wiesenfeld sandpile. It's one static page, no libraries.
+- **Drive** mode drops grains at random squares and lights up each avalanche. It plots a live log-log histogram of avalanche sizes with a fitted slope τ, plus bars of how often a square holds 0–3 grains against the exact infinite-grid values.
+- **Pile** mode pours 4k–131k grains onto one square and grows the familiar fractal.
+- **Identity** mode computes the zero of the sandpile group, stab(6 − stab(6)), for 32–256 grids.
+- Toppling is "bulk" (a square with h grains topples h div 4 times at once) and stack-based, with a per-frame budget, so big avalanches animate and don't freeze the page.
+- `tools/sandpile-test.js` loads the page's core in Node, and `check.sh` now runs it. It checks the **abelian property** (forward, reversed and all-at-once drops give identical piles), grain conservation, the **group identity** (e+e = e and e+c = c, on 1×1, 2×3, 30×20 and 64×64 grids; the 2×2 identity is all 2s), and 8-fold symmetry of a 16,384-grain centre pile. Then it measures. `node tools/sandpile-test.js full` runs grids 32–256 (~3 min).
+
+**Results** (seeded, warm-up 3·L² grains, then 400k–2.6M grains; heights sampled from the middle half of the grid):
+
+| L | mean avalanche size, measured / exact | heights 0/1/2/3 (%) | mean height | naive τ (size) |
+|---|---|---|---|---|
+| 32 | 40.6 / 40.6 | 7.39 / 17.57 / 30.81 / 44.23 | 2.079 | 1.052 |
+| 64 | 153.0 / 153.0 | 7.35 / 17.42 / 30.71 / 44.52 | 2.107 | 1.064 |
+| 128 | 593.3 / 593.9 | 7.35 / 17.40 / 30.64 / 44.61 | 2.116 | 1.081 |
+| 256 | 2340.0 / 2339.3 | 7.36 / 17.39 / 30.63 / 44.61 | 2.119 | 1.100 |
+| exact (∞ grid) | – | 7.36 / 17.39 / 30.63 / 44.62 | 17/8 = 2.125 | ~1.2–1.3 in the literature |
+
+- **Mean avalanche size matches Dhar's exact result to 0.1%** at every size. The exact value comes from inverting the grid Laplacian: a grain dropped on i causes G(i,j) topplings at j on average. The harness solves it by conjugate gradient. That's a strong end-to-end check: any toppling bug would move it.
+- **Height probabilities match the exact infinite-lattice values to 0.01 points at L=256.** That's p0 = 2/π² − 4/π³ and its siblings. At L=32 they're already within 0.4. Mean height creeps toward 17/8 as the boundary's share shrinks.
+- **The one miss: τ.** A straight-line fit to the log-binned size distribution (sizes 10 to L²/8) gives 1.05–1.10, below the 1.2–1.3 usually quoted, though it rises steadily with L. This is a known BTW problem, not (as far as I can tell) a bug: the 2D BTW model doesn't obey simple finite-size scaling (multiscaling; De Menech, Stella & Tebaldi 1998), so naive fits on finite grids come out low. The exact mean-size check makes a toppling bug unlikely. I left the page showing the naive fit, labelled as such.
+- **Dead end, mine:** the first test run "failed" heights. My formula for p1 was wrong (I'd written 1/4 − 2/π² − …), and the simulation was right: it gave 17.4%, the true value. Fixed the formula: p1 = 1/4 − 1/(2π) − 3/π² + 12/π³.
+- **Layout bugs found with Playwright:** the hidden "Grains to pour" label still showed, because `label{display:block}` beats the `hidden` attribute, and on a phone the grid collapsed to zero height (flex-basis 0 in a column). Both fixed and re-screenshotted at 1200×800 and 390×844, with no console errors in any mode.
+
+**Candar review (PR #12):** fast. CI took ~20 s and Candar commented ~80 s after it went green: 0 findings, 3 discarded. But, as on PR #6, it **skipped the main file**, `projects/sandpile/index.html` ("complete patch was unavailable or too large"). That file is 18.7 KB, well under the 40 KB limit the owner set after #7, so I can't tell why: maybe the limit is counted in tokens and not bytes, or new files are handled differently. So the page itself is unreviewed, and only the test harness, check.sh, README and index got looked at. It commented without approving, so the PR needs the owner's manual approval. Track record: #1 1/4, #2 0/2, #6 0 (skipped file), #8 0, #9 0/1, #10 1/2, #11 1/1 then a false repeat, #12 0 (skipped file). Lesson: a new project's single-file page can exceed Candar's limit. Future projects could split the page into index.html + a separate .js file.
+
+**Next session, ranked:**
+1. If PR #11 has merged: Tidepool kelp sense (#1 from the 2026-11-18 entry on that branch). Otherwise ping the owner about #11 in the session's PR.
+2. Sandpile: measure τ properly via moment scaling (⟨s^q⟩ ∝ L^σ(q)) to see the multiscaling directly, not just assert it.
+3. Sandpile: an "add two piles" mode (pick c, show c + e = c live) and a burning-test check that a pile is recurrent.
+4. Tidepool: predators with a lower break-even (carried over from #11's list).
+5. Tidepool brain visualizer (carried over six times now; drop it unless it serves an experiment).
+
+---
+
 ## 2026-11-13 (second session): Trained hunters eat their pool empty
 
 Took last session's #1: breed hunters before releasing them, since catching prey (not energy per kill) looked like the bottleneck. No open PRs. The only `request` issue (#7) is closed, with nothing new on it.
