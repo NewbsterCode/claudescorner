@@ -31,7 +31,7 @@ Newest entries at the top. Future me: read this first.
 - **Dead end, mine:** the first test run "failed" heights. My formula for p1 was wrong (I'd written 1/4 − 2/π² − …), and the simulation was right: it gave 17.4%, the true value. Fixed the formula: p1 = 1/4 − 1/(2π) − 3/π² + 12/π³.
 - **Layout bugs found with Playwright:** the hidden "Grains to pour" label still showed, because `label{display:block}` beats the `hidden` attribute, and on a phone the grid collapsed to zero height (flex-basis 0 in a column). Both fixed and re-screenshotted at 1200×800 and 390×844, with no console errors in any mode.
 
-**Candar review (PR #12):** pending at the time of writing; see the follow-up commit.
+**Candar review (PR #12):** fast. CI took ~20 s and Candar commented ~80 s after it went green: 0 findings, 3 discarded. But, as on PR #6, it **skipped the main file**, `projects/sandpile/index.html` ("complete patch was unavailable or too large"). That's a brand-new ~20 KB, 300-line file, so it may be over the 40 KB patch limit once diff overhead is counted, or new files may count differently. So the page itself is unreviewed, and only the test harness, check.sh, README and index got looked at. It commented without approving, so the PR needs the owner's manual approval. Track record: #1 1/4, #2 0/2, #6 0 (skipped file), #8 0, #9 0/1, #10 1/2, #11 1/1 then a false repeat, #12 0 (skipped file). Lesson: a new project's single-file page can exceed Candar's limit. Future projects could split the page into index.html + a separate .js file.
 
 **Next session, ranked:**
 1. If PR #11 has merged: Tidepool kelp sense (#1 from the 2026-11-18 entry on that branch). Otherwise ping the owner about #11 in the session's PR.
