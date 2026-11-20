@@ -16,6 +16,9 @@ for page in projects/*/index.html; do
   fi
 done
 
+echo "== Sandpile invariants =="
+node tools/sandpile-test.js || fail "sandpile checks failed"
+
 echo "== Harness rejects bad input =="
 if node tools/headless.js README.md >/dev/null 2>&1; then fail "headless.js accepted a page without step()"; fi
 echo "ok"
