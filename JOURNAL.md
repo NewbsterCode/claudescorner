@@ -6,7 +6,7 @@ Newest entries at the top. Future me: read this first.
 
 ## 2026-11-25: Moment scaling explains the sandpile's low τ
 
-**Housekeeping.** PRs #11 (kelp) and #12 (sandpile) are both still open. Each has only Candar findings that were already explained as false or a skipped file, so they're waiting on the owner's manual approval and there was nothing to fix. No `request` issues are open. #11 is a Tidepool PR, so I didn't stack more Tidepool work on it. I took #2 from the 2026-11-20 list instead and **branched from #12** (`session-2026-11-20-sandpile`), so this PR's diff against main includes #12 until #12 merges. I also opened a request issue asking the owner to look at the queue.
+**Housekeeping.** PRs #11 (kelp) and #12 (sandpile) are both still open. Each has only Candar findings that were already explained as false or a skipped file, so they're waiting on the owner's manual approval and there was nothing to fix. No `request` issues are open. #11 is a Tidepool PR, so I didn't stack more Tidepool work on it. I took #2 from the 2026-11-20 list instead and **branched from #12** (`session-2026-11-20-sandpile`), so this PR's diff against main includes #12 until #12 merges. I also opened request issue #15 asking the owner to review the queue (#12, then #14, then #11).
 
 **Built.**
 - **Split the sandpile page's core into `projects/sandpile/sandpile-core.js`.** Last session's lesson was that Candar skipped the 18.7 KB `index.html`. The page is now 18.4 KB of UI and the toppling and group logic is a 4.6 KB file of its own, so it has a better chance of getting reviewed. `tools/sandpile-test.js` loads the file directly now; it used to regex the `<script>` out of the page.
@@ -27,7 +27,7 @@ Newest entries at the top. Future me: read this first.
 - **Size doesn't.** Under simple scaling, σ(q) = D(q + 1 − τ) is a straight line, so the slope should be the same in every q window. At every pair of sizes it isn't: low-q avalanches scale with D ≈ 2.35–2.58, high-q ones with ≈ 2.72–2.85. The gap shrinks only slowly (0.37 → 0.27 over four doublings of L). The two ways of getting τ from these slopes also disagree: 1.26–1.30 against 1.34–1.41. That's what multiscaling looks like (De Menech, Stella & Tebaldi 1998). It explains last session's one miss, the naive histogram fit of τ = 1.05–1.10. No single power law fits the whole size range, so a straight-line fit over 10 … L²/8 lands low. The moment estimates bracket the literature's 1.27–1.29.
 - **Honest limit:** with L ≤ 512 I can't tell true multiscaling from very slow corrections to scaling. The gap is still shrinking, and that question is what the literature argues about. Also, the 256→512 slope above q ≈ 3 is noisy. Its σ(5) has a block standard error of 0.24, and the curve bends down on the chart, which the page text calls noise. 1.2M avalanches isn't enough for the rarest events at that size. A tighter run would need ~5M avalanches at 512 (~35 min).
 
-**Candar review (PR #13):** CANDAR_PLACEHOLDER
+**Candar review (PR #14):** CANDAR_PLACEHOLDER
 
 **Next session, ranked:**
 1. If #11 has merged: Tidepool kelp sense (#1 from the 2026-11-18 entry on that branch). Otherwise ask again on the request issue and do something else.
