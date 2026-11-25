@@ -4,6 +4,40 @@ Newest entries at the top. Future me: read this first.
 
 ---
 
+## 2026-11-25: Moment scaling explains the sandpile's low τ
+
+**Housekeeping.** PRs #11 (kelp) and #12 (sandpile) are both still open. Each has only Candar findings that were already explained as false or a skipped file, so they're waiting on the owner's manual approval and there was nothing to fix. No `request` issues are open. #11 is a Tidepool PR, so I didn't stack more Tidepool work on it. I took #2 from the 2026-11-20 list instead and **branched from #12** (`session-2026-11-20-sandpile`), so this PR's diff against main includes #12 until #12 merges. I also opened a request issue asking the owner to look at the queue.
+
+**Built.**
+- **Split the sandpile page's core into `projects/sandpile/sandpile-core.js`.** Last session's lesson was that Candar skipped the 18.7 KB `index.html`. The page is now 18.4 KB of UI and the toppling and group logic is a 4.6 KB file of its own, so it has a better chance of getting reviewed. `tools/sandpile-test.js` loads the file directly now; it used to regex the `<script>` out of the page.
+- **`tools/sandpile-moments.js`** measures moment scaling, ⟨x^q⟩ ∝ L^σ(q), for avalanche size (topplings) and area (distinct sites), q = 0.5…5, one worker thread per grid size. It starts each grid from all-3s (a recurrent state), mixes for 2·L² grains, then splits the run into 16 blocks for standard errors. `quick` (L = 16–64, about 1 s) runs in `check.sh`. It asserts σ(1) is near 2 and σ(q) is increasing. `full` (L = 32–512) took 8 min 23 s on 4 cores and writes `projects/sandpile/moments.json`.
+- **A fourth page mode, "Scaling"**, plots the effective dimension (slope of σ in q) for each pair of grid sizes, with size solid and area dashed, plus a plain-language explanation. Playwright: all four modes at 1200×800 and 390×844 render with no console errors and no horizontal scroll. Mode switching drive → scaling → centre works.
+
+**Results** (4M avalanches per grid for L = 32–128, 3M at 256, 1.2M at 512; the largest single avalanche at 512 was 6.78M topplings):
+
+| grids | σ_size(1) (exact → 2) | D_size, q 0.5–1.5 | D_size, q 3–5 | D_area, q 3–5 | τ = 2 − 2/D (Dhar) | τ = 1 + q − σ(q)/D at q=5 |
+|---|---|---|---|---|---|---|
+| 32→64 | 1.916 | 2.35 | 2.72 | 2.059 | 1.264 | 1.41 |
+| 64→128 | 1.956 | 2.45 | 2.77 | 2.051 | 1.278 | 1.38 |
+| 128→256 | 1.977 | 2.51 | 2.84 | 2.032 | 1.295 | 1.39 |
+| 256→512 | 1.989 | 2.58 | 2.85 (±~0.1) | 2.032 | 1.298 | 1.34 |
+
+- **The exact anchor holds.** Mean avalanche size must grow like L² (it's the mean of Dhar's Green function), so σ_size(1) must tend to 2. Measured: 1.916 → 1.956 → 1.977 → 1.989, converging cleanly.
+- **Area obeys simple finite-size scaling, or close to it.** Its local dimension is flat in q from q ≈ 1.5 on, and it drifts 2.059 → 2.032 toward the geometric bound of 2. Its τ_area comes out at 1.18–1.20.
+- **Size doesn't.** Under simple scaling, σ(q) = D(q + 1 − τ) is a straight line, so the slope should be the same in every q window. At every pair of sizes it isn't: low-q avalanches scale with D ≈ 2.35–2.58, high-q ones with ≈ 2.72–2.85. The gap shrinks only slowly (0.37 → 0.27 over four doublings of L). The two ways of getting τ from these slopes also disagree: 1.26–1.30 against 1.34–1.41. That's what multiscaling looks like (De Menech, Stella & Tebaldi 1998). It explains last session's one miss, the naive histogram fit of τ = 1.05–1.10. No single power law fits the whole size range, so a straight-line fit over 10 … L²/8 lands low. The moment estimates bracket the literature's 1.27–1.29.
+- **Honest limit:** with L ≤ 512 I can't tell true multiscaling from very slow corrections to scaling. The gap is still shrinking, and that question is what the literature argues about. Also, the 256→512 slope above q ≈ 3 is noisy. Its σ(5) has a block standard error of 0.24, and the curve bends down on the chart, which the page text calls noise. 1.2M avalanches isn't enough for the rarest events at that size. A tighter run would need ~5M avalanches at 512 (~35 min).
+
+**Candar review (PR #13):** CANDAR_PLACEHOLDER
+
+**Next session, ranked:**
+1. If #11 has merged: Tidepool kelp sense (#1 from the 2026-11-18 entry on that branch). Otherwise ask again on the request issue and do something else.
+2. Sandpile: an "add two piles" mode (pick c, show c + e = c live) and a burning-test check that a pile is recurrent (carried over).
+3. Sandpile: a longer L=512 run (5M avalanches, run in the background while doing other work) and L=1024 for one or two low-q points, to see whether the low-q/high-q gap keeps closing.
+4. Tidepool: predators with a lower break-even (carried over).
+5. Something new and unrelated to either project. Two projects is a good number to keep alive, but a fresh idea every few sessions keeps the workshop honest.
+
+---
+
 ## 2026-11-20: A sandpile that matches the textbook (except one number)
 
 **Housekeeping first.** PR #11 (kelp refuges, 2026-11-18) is still open. Its only remaining Candar finding is the false "infinite loop" one, already explained in its body. It's waiting for the owner's manual approval, so there's nothing for me to fix. Its journal entry lives on that branch, so read it there until it merges. No `request` issues are open. Because #11 hasn't merged, I didn't stack more Tidepool work on it. I started a second project instead, which I'd also wanted to do after six Tidepool sessions in a row.
