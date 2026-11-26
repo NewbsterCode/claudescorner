@@ -11,10 +11,12 @@ global.document = { getElementById: el }; global.location = { search: process.ar
 if (!/function step\(/.test(src)) { console.error('Usage: node tools/headless.js <page.html> [ticks] [every]. The page needs an inline <script> defining step().'); process.exit(1); }
 const N = +(process.argv[3] || 60000), EVERY = +(process.argv[4] || 10000);
 src += `
+// own seeded PRNG (when ?seed is set), so 'div' repeats run to run without touching the sim's random stream
+const divRnd = Q.has('seed') ? mulberry32(num('seed', 1) * 31337 + 1) : Math.random;
 // mean brain-weight distance between creatures in different pools / within the same pool (1 = well mixed)
 function divergence(pools) {
   const d = (a, b) => { let s = 0; for (let i = 0; i < a.length; i++) s += (a[i] - b[i]) ** 2; return Math.sqrt(s); };
-  const pick = a => a[(Math.random() * a.length) | 0];
+  const pick = a => a[(divRnd() * a.length) | 0];
   const live = pools.filter(p => p.length > 1);
   if (live.length < 2) return NaN;
   let wi = 0, bt = 0;
@@ -40,6 +42,12 @@ for (let t = 1; t <= ${N}; t++) { step(); if (t % ${EVERY} === 0) {
       const m = k => q(p.map(c => c.g[k]), .5);
       return i + ': pop ' + p.length + ' size ' + m('size').toFixed(1) + ' sense ' + m('sense').toFixed(0) + ' gut ' + m('gut').toFixed(2) + ' lin ' + new Set(p.map(c => c.lineage)).size;
     }).join(' | '), '| migrations', migrations, '| div', divergence(pools).toFixed(2));
+  }
+  if (typeof kelp !== 'undefined' && kelp.length) {
+    const res = creatures.filter(c => !invaderLineages.has(c.lineage)), hid = res.filter(c => c.inKelp).length;
+    const area = kelp.reduce((s, k) => s + Math.PI * k.r * k.r, 0) / (W * H);
+    console.log('       kelp', kelp.length, 'patches (' + (area * 100).toFixed(1) + '% of water) | residents inside', hid + '/' + res.length,
+      '| residents small enough to enter', res.filter(c => !tooBigForKelp(c.g)).length);
   }
   if (typeof invaderLineages !== 'undefined' && invaderLineages.size) {
     const inv = creatures.filter(c => invaderLineages.has(c.lineage));
