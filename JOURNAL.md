@@ -29,8 +29,10 @@ Newest entries at the top. Future me: read this first.
 
 **Candar review (PR #14):** CI took about 20 s. Candar commented ~3 min after CI went green, with **0 findings and 6 discarded**, and didn't approve. It **skipped `projects/sandpile/index.html` again** ("complete patch was unavailable or too large"), though the file is now 18.4 KB. The split still paid off: the new `sandpile-core.js`, with the toppling, identity and histogram logic, was reviewed this time, along with `sandpile-moments.js`. So the code that matters got reviewed, and only the UI file didn't. My guess is that the skip happens because the whole stacked diff of #12 + #14 is large, not because of the file's size. Track record: #1 1/4, #2 0/2, #6 0 (skipped file), #8 0, #9 0/1, #10 1/2, #11 1/1 then a false repeat, #12 0 (skipped file), #14 0 (skipped the UI file; the core was reviewed). The PR needs the owner's manual approval, after #12 merges (request issue #15).
 
+**Postscript (next day):** the owner merged #11, merged main into #12's branch, and approved #14 by hand. I merged the updated #12 branch into this one (the only conflict was a README line; I took the merged text and reapplied this session's two edits), reran `check.sh`, and merged #14. That also carries #12's commits into main.
+
 **Next session, ranked:**
-1. If #11 has merged: Tidepool kelp sense (#1 from the 2026-11-18 entry on that branch). Otherwise ask again on the request issue and do something else.
+1. #11 has merged: Tidepool kelp sense (#1 from the 2026-11-18 entry on that branch). Otherwise ask again on the request issue and do something else.
 2. Sandpile: an "add two piles" mode (pick c, show c + e = c live) and a burning-test check that a pile is recurrent (carried over).
 3. Sandpile: a longer L=512 run (5M avalanches, run in the background while doing other work) and L=1024 for one or two low-q points, to see whether the low-q/high-q gap keeps closing.
 4. Tidepool: predators with a lower break-even (carried over).
@@ -68,11 +70,46 @@ Newest entries at the top. Future me: read this first.
 **Candar review (PR #12):** fast. CI took ~20 s and Candar commented ~80 s after it went green: 0 findings, 3 discarded. But, as on PR #6, it **skipped the main file**, `projects/sandpile/index.html` ("complete patch was unavailable or too large"). That file is 18.7 KB, well under the 40 KB limit the owner set after #7, so I can't tell why: maybe the limit is counted in tokens and not bytes, or new files are handled differently. So the page itself is unreviewed, and only the test harness, check.sh, README and index got looked at. It commented without approving, so the PR needs the owner's manual approval. Track record: #1 1/4, #2 0/2, #6 0 (skipped file), #8 0, #9 0/1, #10 1/2, #11 1/1 then a false repeat, #12 0 (skipped file). Lesson: a new project's single-file page can exceed Candar's limit. Future projects could split the page into index.html + a separate .js file.
 
 **Next session, ranked:**
-1. If PR #11 has merged: Tidepool kelp sense (#1 from the 2026-11-18 entry on that branch). Otherwise ping the owner about #11 in the session's PR.
+1. Tidepool kelp sense (#1 from the 2026-11-18 entry below; PR #11 merged on 2026-11-26).
 2. Sandpile: measure τ properly via moment scaling (⟨s^q⟩ ∝ L^σ(q)) to see the multiscaling directly, not just assert it.
 3. Sandpile: an "add two piles" mode (pick c, show c + e = c live) and a burning-test check that a pile is recurrent.
 4. Tidepool: predators with a lower break-even (carried over from #11's list).
 5. Tidepool brain visualizer (carried over six times now; drop it unless it serves an experiment).
+## 2026-11-18: Kelp saves the prey, and the hunters starve sooner
+
+Took last session's #1: give prey a refuge, then rerun the trained hunters. No open PRs and no open `request` issues.
+
+**Built.**
+- `kelp=N`: N round kelp patches per pool (`kelpr`, default 45 px). Bodies bigger than `kelpmax` (default 6) turn back at the edge, and nothing inside kelp can be eaten by a creature outside it. Patch positions come from their own seeded PRNG and keep clear of walls. There's a "Kelp refuges" selector in the sidebar and a "Hiding in kelp" count.
+- `tools/headless.js` prints a kelp line (patches, % of water, residents inside, residents small enough to enter).
+- Carried-over #5 is done: the harness's `div` now uses its own seeded PRNG, so the whole output repeats exactly for a given seed.
+- Default runs are unchanged. I diffed seed=1 and a trained-hunter run against main: only `div` differs, as intended.
+
+**Dead end first: kelp starved everyone, and that was my bug.** In the first batch, pool A *residents* crashed to ~4 again and again, long after the invaders were gone. A predator-free control showed the same crashes in 4/6 kelp runs and in 0/3 without kelp. My first guess was an ecological trap (big bodies steering at food they can't reach), but they were bouncing off kelp on under 0.5% of ticks. The real cause: each pool's plant regrowth stops at a per-pool cap. Once big residents ate the small ones, nobody could graze inside the kelp. Plants piled up there until they were **46–56% of the pool's food** in kelp covering 5% of the water, and regrowth everywhere else stopped. Fix: kelp gets its own share of the cap, in proportion to its area. After the fix, the controls never dropped below 23 in pool A (it was 4 before). The numbers below are all post-fix. I'm keeping the dead end here because the crashes looked like real ecology.
+
+**Results** (sealed pools, trained hunters released into pool A at 20k, no reseeding, seeds 1–4):
+
+| condition | founder kills per 1k ticks alive | worst pool A after release | invader lineage seen after +2.5k ticks |
+|---|---|---|---|
+| 30 gens, no kelp | 5.6–13.4 (mean 9.1) | 5–57 (seed 2: 80 → 5) | 2/4 (gone by 25k and 32.5k) |
+| 30 gens, `kelp=2` (5.5% of water) | 0.0–6.7 (mean 4.2) | 31–52 | 0/4 |
+| 30 gens, `kelp=4` (10.9%) | 1.3–11.7 (mean 6.5) | 4–42 (seed 2 still crashed) | 1/4 (seed 1: 16 alive at gen 14, gone by 25k) |
+| 120 gens, no kelp (500-tick samples) | 7.1–14.9 (mean 11.9) | 4–43 | lineages last seen 20.5k–25.5k |
+| 120 gens, `kelp=4` | 4.9–8.7 (mean 6.6) | 22–40 | last seen 20k–24k |
+
+- **The refuge works for the prey.** With 120-gen hunters, the worst dip in pool A went from 4–43 to 22–40, and the hunters' kill rate roughly halved.
+- **It doesn't make predators viable. It just changes how they die.** The hunters were already near break-even (~9 kills per 1k ticks), so halving their kills puts them below it. They starve sooner, before they can overexploit. Every lineage was still dead within ~5k ticks of release, in 16/16 kelp runs. The textbook result that a refuge stabilizes predator–prey cycles needs predators that can survive at lower prey availability. These can't.
+- **The residents don't use the kelp on purpose.** The share of residents inside kelp tracks its area (kelp=2: 1.8–4.9% of residents in 5.5% of the water; kelp=4: 7.7–13% in 10.9%). They have no sense for kelp, so hiding is luck. The refuge is passive.
+- One curiosity I didn't chase: with kelp=4, pool A in seed 1 stayed at ~30–40 for the 60k ticks after the invasion, against ~65 before it. The invaders were long gone.
+
+**Candar review (PR #11):** CI took ~20 s, and Candar commented about 1.5 min after it went green: 1 finding, 2 discarded. The finding is **real, but only at an extreme setting**. The loop that re-picks a release point outside kelp had no exit, so with `?kelpr=` big enough for one patch to cover a whole pool (I tried `kelp=1&kelpr=700`), releasing predators hung the page. I capped it at 200 re-picks. Seeded experiment outputs are unchanged (diffed), and the case that used to hang now runs. Track record: #1 1/4, #2 0/2, #6 0, #8 0, #9 0/1, #10 1/2, #11 1/1. That's its cleanest review so far, and it's a bug I missed. Its re-review of the fix (~4.5 min after CI) repeated the same finding word for word, and that one is **false**: the loop is now `for (let t = 0; t < 200 && …; t++)`, so it can't run forever, and the `kelpr=700` case finishes. I didn't change the code, explained this in the PR body, and left the PR for the owner. That's the same pattern as #10: the first finding was useful, and the re-review didn't see the fix.
+
+**Next session, ranked:**
+1. Give creatures a kelp sense (one more brain input), so hiding can evolve rather than happen by luck. That changes the brain layout, so it should sit behind a flag to keep old seeded runs repeatable.
+2. Predators need a lower break-even, not just better aim: test cheaper predator metabolism or a lower `kelpmax`, so that refuges and hunters can coexist. Or release predators with reseeding over a long run, and look for any lineage that persists.
+3. Trace why linked pools kill trained hunters faster (deaths by cause, carried over).
+4. Co-evolve prey in the training arena (carried over).
+5. Brain visualizer for the selected creature (carried over five times; maybe it's time, or time to drop it).
 
 ---
 
