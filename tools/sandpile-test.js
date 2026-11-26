@@ -1,8 +1,7 @@
 // Checks the sandpile page's core against facts that must hold, then measures it.
 // node tools/sandpile-test.js [quick|full]
 const fs = require('fs'), path = require('path');
-const html = fs.readFileSync(path.join(__dirname, '../projects/sandpile/index.html'), 'utf8');
-const src = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+const src = fs.readFileSync(path.join(__dirname, '../projects/sandpile/sandpile-core.js'), 'utf8');
 const S = new Function(src + '\nreturn { Pile, identityPile, EXACT, Hist, rng, driveOnce };')();
 const { Pile, identityPile, EXACT, Hist, rng, driveOnce } = S;
 const full = process.argv[2] === 'full';
