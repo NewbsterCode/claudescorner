@@ -49,6 +49,8 @@
   </select></label>
   <label>Kelp refuges <select id="sKelp" title="Small creatures (size ≤ 6) can hide in kelp; nothing outside can eat them there">
     <option value="0">none</option><option value="2">2 patches per pool</option><option value="4">4 patches per pool</option></select></label>
+  <label>Kelp sense <select id="sKSense" title="Adds three brain inputs: kelp to the left, kelp to the right, and inside kelp. Restarts the world, because brains get a different shape">
+    <option value="0">off (blind to kelp)</option><option value="1">on (can learn to hide)</option></select></label>
   <label>Release into <select id="sIPool"><option value="-1">anywhere</option><option value="0">pool A (rich)</option><option value="1">pool B</option><option value="2">pool C (poor)</option></select></label>
   <label>Predator brains <select id="sIBrain" title="Trained brains are bred in a small hunting arena first; takes a few seconds the first time">
     <option value="random">random</option><option value="local">borrowed from residents</option><option value="trained">trained hunters</option></select></label>
@@ -83,6 +85,9 @@ const $ = id => document.getElementById(id);
 // ?meatx=M multiplies the energy a kill pays to a carnivore gut (< 0.85) only, so residents' cannibalism is unchanged (default 1).
 // Prey refuge: ?kelp=N dense kelp patches per pool (default 0 = off), each ?kelpr=R px in radius (default 45).
 // Bodies bigger than ?kelpmax=S (default 6) can't push into kelp, and nothing inside kelp can be eaten by a creature outside it.
+// ?ksense=1 gives every brain three more inputs: kelp at its left and right food probes, and "I'm in kelp".
+// It changes the brain layout (and so the random stream), so it's off by default and only set from the URL.
+// ?ksense=2 is the control: the same 12-input layout, but the kelp inputs always read 0.
 const Q = (() => { try { return new URLSearchParams(location.search); } catch (e) { return new URLSearchParams(''); } })();
 const num = (k, d) => Q.has(k) && isFinite(+Q.get(k)) ? +Q.get(k) : d;
 const cfg = {
@@ -101,6 +106,7 @@ const cfg = {
   kelp: Math.max(0, Math.floor(num('kelp', 0))),
   kelpr: Math.max(5, num('kelpr', 45)),
   kelpmax: num('kelpmax', 6),
+  ksense: [1, 2].includes(num('ksense', 0)) ? num('ksense', 0) : 0,
 };
 // how much a gut gets from plants and from meat (multipliers); K=1 keeps the exact old expressions
 const plantGain = gut => gut < cfg.plantmin ? 0 : cfg.gutk === 1 ? gut : 0.5 + Math.pow(gut - 0.5, cfg.gutk);
@@ -113,8 +119,9 @@ const gauss = () => { let u = 0, v = 0; while (!u) u = rnd(); while (!v) v = rnd
 const wrapD = (d, L) => d > L / 2 ? d - L : d < -L / 2 ? d + L : d;
 
 // ---------- brain ----------
-// inputs: food L, food R, food ahead, prey L, prey R, threat, crowd, energy, bias -> hidden(8) -> turn, thrust
-const NI = 9, NH = 8, NO = 2;
+// inputs: food L, food R, food ahead, prey L, prey R, threat, crowd, energy, bias
+//   [+ kelp L, kelp R, in kelp, with ?ksense=1] -> hidden(8) -> turn, thrust
+const NI = cfg.ksense ? 12 : 9, NH = 8, NO = 2;
 const NW = NI * NH + NH * NO;
 function newGenome() {
   const w = new Float32Array(NW); for (let i = 0; i < NW; i++) w[i] = gauss() * 0.8;
@@ -381,6 +388,7 @@ function step() {
     inp[6] = Math.min(1, crowd / 6);
     inp[7] = Math.min(1, c.energy / 150);
     inp[8] = 1;
+    if (cfg.ksense === 1) { inp[9] = kelp.length && inKelp(lx, ly) ? 1 : 0; inp[10] = kelp.length && inKelp(rx, ry) ? 1 : 0; inp[11] = c.inKelp ? 1 : 0; }
     think(g.w, inp, out);
     c.a += out[0] * 0.25;
     c.v = (out[1] + 1) * 0.5 * 3.2 * Math.pow(g.size / 3, -cfg.vexp);
@@ -510,6 +518,12 @@ addEventListener('resize', () => { resize(); buildZones(); buildKelp(); });
 if ($('sKelp').options && ![...$('sKelp').options].some(o => +o.value === cfg.kelp)) $('sKelp').add(new Option(cfg.kelp + ' patches per pool', cfg.kelp));   // a ?kelp= value that isn't a preset
 $('sKelp').value = String(cfg.kelp);
 $('sKelp').onchange = e => { cfg.kelp = +e.target.value; buildKelp(); };
+$('sKSense').value = String(cfg.ksense === 1 ? 1 : 0);
+$('sKSense').onchange = e => {   // a brain-shape change can't apply to living creatures, so reload with the new setting
+  const q = new URLSearchParams(location.search);
+  if (+e.target.value) { q.set('ksense', '1'); if (!cfg.kelp) q.set('kelp', '4'); else q.set('kelp', String(cfg.kelp)); } else q.delete('ksense');
+  location.search = q.toString();
+};
 $('sIPool').value = String(cfg.ipool); if (!$('sIPool').value) $('sIPool').value = '-1';
 $('sIPool').onchange = e => { cfg.ipool = +e.target.value; };
 $('sIBrain').value = cfg.ibrain;

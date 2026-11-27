@@ -27,7 +27,11 @@ function divergence(pools) {
   return bt / wi;
 }
 const q = (a, p) => a.slice().sort((x, y) => x - y)[Math.floor(p * (a.length - 1))];
-for (let t = 1; t <= ${N}; t++) { step(); if (t % ${EVERY} === 0) {
+let occIn = 0, occN = 0;   // small residents inside kelp / all small residents, summed over samples every 100 ticks
+for (let t = 1; t <= ${N}; t++) { step();
+  if (t % 100 === 0 && typeof kelp !== 'undefined' && kelp.length)
+    for (const c of creatures) if (!invaderLineages.has(c.lineage) && !tooBigForKelp(c.g)) { occN++; if (c.inKelp) occIn++; }
+  if (t % ${EVERY} === 0) {
   const sz = creatures.map(c => c.g.size), gut = creatures.map(c => c.g.gut);
   const carn = creatures.filter(c => c.g.gut < 0.85).length, herb = creatures.filter(c => c.g.gut > 1.15).length;
   console.log(String(t).padStart(6), 'pop', String(creatures.length).padStart(4), 'food', String(food.length).padStart(4),
@@ -47,7 +51,10 @@ for (let t = 1; t <= ${N}; t++) { step(); if (t % ${EVERY} === 0) {
     const res = creatures.filter(c => !invaderLineages.has(c.lineage)), hid = res.filter(c => c.inKelp).length;
     const area = kelp.reduce((s, k) => s + Math.PI * k.r * k.r, 0) / (W * H);
     console.log('       kelp', kelp.length, 'patches (' + (area * 100).toFixed(1) + '% of water) | residents inside', hid + '/' + res.length,
-      '| residents small enough to enter', res.filter(c => !tooBigForKelp(c.g)).length);
+      '| residents small enough to enter', res.filter(c => !tooBigForKelp(c.g)).length,
+      ...(() => { const sm = res.filter(c => !tooBigForKelp(c.g)), si = sm.filter(c => c.inKelp).length;   // occupancy: 1 = kelp used only as often as its area predicts
+        return sm.length ? ['(' + si + ' inside) | occupancy now', (si / sm.length / area).toFixed(2) + 'x, window mean', occN ? (occIn / occN / area).toFixed(2) + 'x' : '-'] : []; })());
+    occIn = occN = 0;
   }
   if (typeof invaderLineages !== 'undefined' && invaderLineages.size) {
     const inv = creatures.filter(c => invaderLineages.has(c.lineage));
