@@ -4,6 +4,42 @@ Newest entries at the top. Future me: read this first.
 
 ---
 
+## 2026-11-27: Prey can learn where the kelp is, a little, and it doesn't save them
+
+**Housekeeping.** The owner merged everything: #11, #12 and #14 are all in main, and request #15 is closed ("approved"). No open PRs and no open `request` issues. One stumble: my local `origin/main` ref was stale (it pointed at PR #10's merge), so my first branch started from old code. I spotted it when the kelp code was missing, deleted the empty branch, and re-branched from the real main (`be1bab9`).
+
+**Built.**
+- **`?ksense=1`** gives every brain three more inputs: kelp at the left food probe, kelp at the right food probe, and "I'm in kelp" (each 0 or 1). Brains go from 9 to 12 inputs, so this changes the random stream and is off by default. Off-flag runs are **byte-identical** to main: I diffed seed=1 and a kelp + trained-hunter run at 10k/20k/30k.
+- **`?ksense=2`** is a control with the same 12-input brain, but the kelp inputs always read 0. I added it after the first batch, because a population drop could have come from the layout and not from the sense, and it turned out to be the layout (below).
+- **A "Kelp sense" selector** in the sidebar. A brain-shape change can't apply to living creatures, so it reloads the page with `ksense=1` (and `kelp=4` if kelp was off). Playwright at 1200×800 and 390×844: the selector round-trips, there's no horizontal scroll and no console errors.
+- **`tools/headless.js`** now prints kelp **occupancy**: the share of small-enough residents inside kelp divided by kelp's share of the water (1 = no preference). It's sampled every 100 ticks and averaged over each report window. Snapshots were too noisy: one run read 1.67× now against 0.72× for the window.
+
+**Results.** Sealed pools, `kelp=4` (10.9% of the water), default predators (random-brain carnivores, topped up when fewer than 3 are left), 150k ticks, seeds 1–12 per condition. Occupancy and population are averaged over 50k–150k.
+
+| condition | occupancy, mean (range) | population, mean (sd) | small residents |
+|---|---|---|---|
+| no kelp sense (`ksense=0`) | 1.10× (0.98–1.19) | 121 (13) | 82 |
+| control: 12 inputs, all zero (`ksense=2`) | 1.13× (1.03–1.36) | 109 (12) | 69 |
+| kelp sense (`ksense=1`) | **1.36×** (1.15–1.67) | 102 (8) | 68 |
+
+- **The sense gets used.** Sense beats control in 93% of seed pairs, and the control is no different from no sense (54%). But it's a weak preference: 1.36× means about 15% of the small residents in kelp, against 11% for its area.
+- **Part of it isn't evolution.** Occupancy with sense is already 1.24× in the first 10k ticks, then climbs to 1.28× by 10–50k and 1.33–1.39× by 50–150k. Random brains react to any input, and "turn when you see kelp" sometimes means turning into it. Selection adds roughly a third of the effect, slowly.
+- **Blind residents sit at 1.10×, not 1.00×.** That's probably survivorship: residents outside kelp get eaten, residents inside don't. I didn't test this.
+- **The population drop is the brain layout, not the sense.** Going from 9 to 12 inputs cut the population from 121 to 109 even with the new inputs held at zero (off > control in 76% of pairs). The extra weights do nothing, so my guess is mutation: each child mutates 30% of its weights, and with 12 inputs more of the mutations land in hidden units that also read real inputs. I haven't confirmed that. Without the control I'd have reported "kelp sense costs 16% of the population" and been wrong.
+- **Against trained hunters, the sense didn't help.** Same world, 30-gen trained hunters released into pool A at 60k, no reseeding, seeds 1–6. Pool A's minimum after release: sense 20–44 (mean 34), control 3–62 (mean 32). Hunter kills per 1k ticks alive: 0–10.2 (mean 6.9) against 2.9–12.5 (mean 7.3). No measurable difference with six seeds. A preference this weak can't protect a pool, and in most seeds the hunters were dead within a few thousand ticks either way.
+- **A false lead:** in seed 2 (sense), occupancy jumped from 0.3× to 3.3× right after release, which looked like hiding from the hunters. It wasn't. The residents there had grown past `kelpmax` (median size 7.3), so only 5–13 were small enough to count, and the hunters died with 0 kills. Occupancy is noisy when few residents can fit in the kelp.
+
+**Candar review (PR #16):** fast. CI took ~25 s, and Candar **approved** ~80 s after CI went green: 0 findings, 3 discarded. Unlike #12 and #14, the review body mentions no skipped files, so the 33 KB Tidepool page seems to have been reviewed (the diff to it is small). That's its first outright approval on one of my PRs. I can't check whether the 3 discarded findings were real, because Candar doesn't show them. Track record: #1 1/4, #2 0/2, #6 0 (skipped file), #8 0, #9 0/1, #10 1/2, #11 1/1 then a false repeat, #12 0 (skipped file), #14 0 (skipped the UI file), #16 0 (approved). This journal edit was pushed after the approval, so it needed a re-review before merging.
+
+**Next session, ranked:**
+1. Find out why hiding stays weak. The likely reason is that a hider gives up grazing: kelp gets only its area share of plants. Test that with plant-richer kelp (a `kelpfood` multiplier), and see whether occupancy rises well above 1.4× when hiding stops costing food.
+2. Confirm or kill the mutation explanation for the 12-input population drop (e.g. mutate only the weights of inputs that exist, or test the control with mutation rate × 9/12).
+3. Sandpile: an "add two piles" mode and a burning-test check that a pile is recurrent (carried over).
+4. Sandpile: a longer L=512 run and L=1024 low-q points (carried over).
+5. Something new and unrelated to either project (carried over; it's been three sessions).
+
+---
+
 ## 2026-11-25: Moment scaling explains the sandpile's low τ
 
 **Housekeeping.** PRs #11 (kelp) and #12 (sandpile) are both still open. Each has only Candar findings that were already explained as false or a skipped file, so they're waiting on the owner's manual approval and there was nothing to fix. No `request` issues are open. #11 is a Tidepool PR, so I didn't stack more Tidepool work on it. I took #2 from the 2026-11-20 list instead and **branched from #12** (`session-2026-11-20-sandpile`), so this PR's diff against main includes #12 until #12 merges. I also opened request issue #15 asking the owner to review the queue (#12, then #14, then #11).
